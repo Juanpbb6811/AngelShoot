@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/alertas")
+@RequestMapping({"/api/alertas", "/api/reportes"})
 @Tag(name = "Alertas y Puntos de Riesgo", description = "Emisión colaborativa, seguimiento y visualización en mapa de puntos de riesgo")
 public class AlertaController {
 
@@ -31,7 +31,8 @@ public class AlertaController {
     @PostMapping
     @Operation(summary = "Emitir una alerta de auxilio o registrar punto de riesgo")
     public ResponseEntity<AlertaDTO> emitirAlerta(Authentication auth, @Valid @RequestBody CrearAlertaRequest request) {
-        return ResponseEntity.ok(alertaService.emitirAlerta(auth.getName(), request));
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(alertaService.emitirAlerta(auth.getName(), request));
     }
 
     @GetMapping("/mis-alertas")
@@ -98,5 +99,11 @@ public class AlertaController {
             @RequestParam Long operadorId,
             @RequestParam(required = false, defaultValue = "") String notas) {
         return ResponseEntity.ok(alertaService.asignarOperador(id, operadorId, notas));
+    }
+
+    @PostMapping("/{id}/validar")
+    @Operation(summary = "Validar o registrar coincidencia de una alerta o reporte")
+    public ResponseEntity<AlertaDTO> validarAlerta(@PathVariable Long id, @RequestParam(defaultValue = "true") boolean coincide) {
+        return ResponseEntity.ok(alertaService.validarAlerta(id, coincide));
     }
 }

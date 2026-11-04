@@ -7,5 +7,6 @@ public enum TipoAlerta {
     ACOSO_O_INTIMIDACION,       // Acoso callejero, hostigamiento o contacto inapropiado
     ILUMINACION_DEFICIENTE,     // Calles oscuras, postes apagados
     ZONA_DESOLADA,              // Parques o pasos solitarios sin vigilancia
-    EMERGENCIA_MEDICA           // Asistencia médica o descompensación
+    EMERGENCIA_MEDICA,          // Asistencia médica o descompensación
+    POCA_VIGILANCIA             // Poca presencia policial o de seguridad privada
 }

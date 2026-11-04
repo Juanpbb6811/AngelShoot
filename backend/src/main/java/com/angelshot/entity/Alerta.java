@@ -56,6 +56,15 @@ public class Alerta {
     @Column(name = "evidencia_foto")
     private byte[] evidenciaFoto;
 
+    @Column(name = "votos_positivos")
+    private Integer votosPositivos = 8;
+
+    @Column(name = "votos_totales")
+    private Integer votosTotales = 10;
+
+    @Column(name = "anonimo")
+    private Boolean anonimo = false;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -63,6 +72,9 @@ public class Alerta {
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     public Alerta() {
+        this.votosPositivos = 8;
+        this.votosTotales = 10;
+        this.anonimo = false;
     }
 
     public Alerta(Usuario usuario, TipoAlerta tipoAlerta, NivelUrgencia nivelUrgencia, String municipio, String ubicacionDetalle, Double latitud, Double longitud, String descripcion) {
@@ -77,6 +89,9 @@ public class Alerta {
         this.departamento = "Cundinamarca";
         this.activo = true;
         this.estado = EstadoAlerta.EMITIDA;
+        this.votosPositivos = 8;
+        this.votosTotales = 10;
+        this.anonimo = false;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
@@ -213,5 +228,29 @@ public class Alerta {
 
     public void setActivo(Boolean activo) {
         this.activo = activo;
+    }
+
+    public Integer getVotosPositivos() {
+        return votosPositivos != null ? votosPositivos : 8;
+    }
+
+    public void setVotosPositivos(Integer votosPositivos) {
+        this.votosPositivos = votosPositivos;
+    }
+
+    public Integer getVotosTotales() {
+        return votosTotales != null ? votosTotales : 10;
+    }
+
+    public void setVotosTotales(Integer votosTotales) {
+        this.votosTotales = votosTotales;
+    }
+
+    public Boolean getAnonimo() {
+        return anonimo != null ? anonimo : false;
+    }
+
+    public void setAnonimo(Boolean anonimo) {
+        this.anonimo = anonimo;
     }
 }

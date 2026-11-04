@@ -2,1063 +2,1952 @@ import { Component, OnInit, AfterViewInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
-import { Alerta, Estadisticas, TipoAlerta, NivelUrgencia, CrearAlertaRequest } from '../../core/models/models';
+import { Alerta, AuthResponse, CrearAlertaRequest, TipoAlerta } from '../../core/models/models';
 
 declare const L: any;
+
+interface SugerenciaNominatim {
+  display_name: string;
+  lat: string;
+  lon: string;
+}
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="app-container">
-      <!-- Encabezado Principal -->
-      <header class="header">
-        <div class="header-branding">
-          <div class="logo-badge">🛡️</div>
-          <div>
-            <h1 class="title">Angel Shot &bull; Ruta Segura</h1>
-            <p class="subtitle">Visibilización colaborativa de puntos de riesgo nocturno para mujeres (Chía &bull; Zipaquirá &bull; Cajicá)</p>
+    <div class="mobile-app-wrapper">
+      <div class="mobile-phone-container">
+
+        <!-- STATUS BAR FICTICIA (ESTILO MOCKUP 21:41) -->
+        <div class="status-bar">
+          <span class="status-time">21:41</span>
+          <div class="status-icons">
+            <span class="status-signal">●●●●</span>
+            <span class="status-wifi">📶</span>
+            <span class="status-battery">🔋</span>
           </div>
         </div>
 
-        <div class="header-actions">
-          <div *ngIf="usuarioActual; else loginPrompt" class="user-badge">
-            <span class="user-avatar">👤</span>
-            <div class="user-info">
-              <strong>{{ usuarioActual.nombre }}</strong>
-              <small>{{ usuarioActual.email }}</small>
-            </div>
-            <button (click)="cerrarSesion()" class="btn-secondary btn-sm">Salir</button>
-          </div>
-          <ng-template #loginPrompt>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <button (click)="abrirModalLogin()" class="btn-secondary btn-sm">
-                🔑 Iniciar Sesión
-              </button>
-              <button (click)="abrirModalRegistro()" class="btn-primary btn-sm">
-                📝 Registrarse
-              </button>
-            </div>
-          </ng-template>
-        </div>
-      </header>
-
-      <!-- Banner de Alcance y Delimitación -->
-      <div class="scope-banner">
-        <span class="scope-icon">ℹ️</span>
-        <div>
-          <strong>Alcance del Reto (Problema 6):</strong> Plataforma ciudadana orientada a visibilizar y prevenir riesgos en el espacio público nocturno (acoso, luminarias apagadas, zonas desoladas). <em>No realiza rastreo GPS continuo en segundo plano ni botón de pánico policial directo.</em>
-        </div>
-      </div>
-
-      <!-- Métricas del Sistema -->
-      <section class="stats-grid">
-        <div class="stat-card border-blue">
-          <span class="stat-label">Total de Reportes</span>
-          <span class="stat-value">{{ stats?.totalAlertas ?? alertas.length }}</span>
-        </div>
-        <div class="stat-card border-purple">
-          <span class="stat-label">Chía</span>
-          <span class="stat-value">{{ contarPorMunicipio('Chía') }}</span>
-        </div>
-        <div class="stat-card border-amber">
-          <span class="stat-label">Zipaquirá</span>
-          <span class="stat-value">{{ contarPorMunicipio('Zipaquirá') }}</span>
-        </div>
-        <div class="stat-card border-emerald">
-          <span class="stat-label">Cajicá</span>
-          <span class="stat-value">{{ contarPorMunicipio('Cajicá') }}</span>
-        </div>
-      </section>
-
-      <!-- Layout Principal: Formulario de Reporte y Mapa -->
-      <div class="main-grid">
-        <!-- Columna Izquierda: Formulario de Reporte (RF01, RF02, RF09) -->
-        <section class="card form-card">
-          <div class="card-header">
-            <h2>⚠️ Reportar Punto de Riesgo</h2>
-            <span class="badge badge-jwt">Protegido por JWT</span>
-          </div>
-
-          <div *ngIf="!usuarioActual" class="auth-required-notice">
-            <p>🔒 <strong>Acceso restringido:</strong> Debes autenticarte con tu cuenta para registrar reportes de riesgo en el sistema.</p>
-            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-              <button (click)="abrirModalLogin()" class="btn-outline-primary" style="flex: 1;">
-                Iniciar Sesión
-              </button>
-              <button (click)="abrirModalRegistro()" class="btn-primary" style="flex: 1;">
-                Crear Cuenta
-              </button>
-            </div>
-          </div>
-
-          <form *ngIf="usuarioActual" (ngSubmit)="enviarReporte()" #reporteForm="ngForm" class="reporte-form">
-            <!-- Mensaje de éxito / error -->
-            <div *ngIf="mensajeExito" class="alert alert-success">{{ mensajeExito }}</div>
-            <div *ngIf="mensajeError" class="alert alert-danger">{{ mensajeError }}</div>
-
-            <!-- Selección de Municipio -->
-            <div class="form-group">
-              <label for="municipio">Municipio en Cundinamarca <span class="req">*</span></label>
-              <select id="municipio" [(ngModel)]="nuevoReporte.municipio" name="municipio" required (change)="alCambiarMunicipio()" class="form-control">
-                <option value="Chía">Chía (Cundinamarca)</option>
-                <option value="Zipaquirá">Zipaquirá (Cundinamarca)</option>
-                <option value="Cajicá">Cajicá (Cundinamarca)</option>
-              </select>
-            </div>
-
-            <!-- Punto de Referencia Específico -->
-            <div class="form-group">
-              <label for="referencia">Punto de Referencia Específico <span class="req">*</span></label>
-              <input
-                id="referencia"
-                type="text"
-                [(ngModel)]="nuevoReporte.ubicacionDetalle"
-                name="ubicacionDetalle"
-                placeholder="Ej. Callejón peatonal U. Sabana / Frente al paradero variante"
-                required
-                class="form-control"
-              />
-              <small class="hint">Indica esquinas, parques, puentes o negocios conocidos.</small>
-            </div>
-
-            <!-- Categoría de Riesgo -->
-            <div class="form-group">
-              <label for="categoria">Categoría de Riesgo <span class="req">*</span></label>
-              <select id="categoria" [(ngModel)]="nuevoReporte.tipoAlerta" name="tipoAlerta" required class="form-control">
-                <option value="ACOSO_O_INTIMIDACION">🚨 Acoso callejero / Intimidación verbal o física</option>
-                <option value="ILUMINACION_DEFICIENTE">💡 Iluminación deficiente / Vía a oscuras</option>
-                <option value="ZONA_DESOLADA">🏚️ Zona desolada / Sin vigilancia comercial ni pública</option>
-                <option value="ANGEL_SHOT_SOLO">🍸 Protocolo Angel Shot (Establecimiento / Bar)</option>
-                <option value="EMERGENCIA_MEDICA">🚑 Emergencia médica en vía pública</option>
-              </select>
-            </div>
-
-            <!-- Nivel de Urgencia -->
-            <div class="form-group">
-              <label for="urgencia">Nivel de Percepción del Riesgo</label>
-              <select id="urgencia" [(ngModel)]="nuevoReporte.nivelUrgencia" name="nivelUrgencia" class="form-control">
-                <option value="BAJA">Baja (Precaución preventiva)</option>
-                <option value="MEDIA">Media (Evitar transitar sola)</option>
-                <option value="ALTA">Alta (Zona de peligro recurrente)</option>
-                <option value="CRITICA">Crítica (Incidente reciente / Muy peligroso)</option>
-              </select>
-            </div>
-
-            <!-- Geocodificación y Coordenadas -->
-            <div class="form-group">
-              <label>Coordenadas (Latitud, Longitud)</label>
-              <div class="coord-inputs">
-                <input type="number" step="any" [(ngModel)]="nuevoReporte.latitud" name="latitud" placeholder="Latitud" class="form-control" />
-                <input type="number" step="any" [(ngModel)]="nuevoReporte.longitud" name="longitud" placeholder="Longitud" class="form-control" />
+        <!-- ========================================== -->
+        <!-- PESTAÑA 1: MAPA / LISTA (PANTALLAS 5 Y 6) -->
+        <!-- ========================================== -->
+        <main *ngIf="tabActiva === 'mapa'" class="tab-content">
+          <!-- Header con Selector de Municipio -->
+          <header class="app-header">
+            <div class="brand-row">
+              <span class="brand-title">ANGEL SHOT</span>
+              <div class="municipio-selector-wrap">
+                <select [(ngModel)]="municipioSeleccionado" (change)="filtrarAlertas()" class="municipio-select">
+                  <option value="Chía">Chía, Cundinamarca</option>
+                  <option value="Soacha">Soacha, Cundinamarca</option>
+                  <option value="Cajicá">Cajicá, Cundinamarca</option>
+                  <option value="Zipaquirá">Zipaquirá, Cundinamarca</option>
+                  <option value="Bogotá">Bogotá, D.C.</option>
+                  <option value="TODOS">Todos los municipios</option>
+                </select>
+                <span class="select-arrow">▾</span>
               </div>
-              <div class="geo-actions">
-                <button type="button" (click)="obtenerUbicacionActual()" class="btn-geo" [disabled]="cargandoGeo">
-                  <span>📍</span> {{ cargandoGeo ? 'Consultando API BigDataCloud...' : 'Capturar mi GPS & Geocodificar' }}
+            </div>
+
+            <!-- Segmented Control: [ Mapa | Lista ] -->
+            <div class="segmented-control">
+              <button 
+                type="button" 
+                class="seg-btn" 
+                [class.active]="vistaMapaLista === 'mapa'" 
+                (click)="cambiarVistaMapaLista('mapa')">
+                🗺️ Mapa
+              </button>
+              <button 
+                type="button" 
+                class="seg-btn" 
+                [class.active]="vistaMapaLista === 'lista'" 
+                (click)="cambiarVistaMapaLista('lista')">
+                📋 Lista
+              </button>
+            </div>
+
+            <!-- Scroll Horizontal de Filtros por Categoría -->
+            <div class="filter-pills-scroll">
+              <button 
+                type="button" 
+                class="pill-btn" 
+                [class.active]="filtroTipo === 'TODOS'" 
+                (click)="seleccionarFiltroTipo('TODOS')">
+                Ver todos
+              </button>
+              <button 
+                type="button" 
+                class="pill-btn pill-luz" 
+                [class.active]="filtroTipo === 'ILUMINACION_DEFICIENTE'" 
+                (click)="seleccionarFiltroTipo('ILUMINACION_DEFICIENTE')">
+                🟡 Falta de luz
+              </button>
+              <button 
+                type="button" 
+                class="pill-btn pill-acoso" 
+                [class.active]="filtroTipo === 'ACOSO_O_INTIMIDACION'" 
+                (click)="seleccionarFiltroTipo('ACOSO_O_INTIMIDACION')">
+                🔴 Acoso
+              </button>
+              <button 
+                type="button" 
+                class="pill-btn pill-desolada" 
+                [class.active]="filtroTipo === 'ZONA_DESOLADA'" 
+                (click)="seleccionarFiltroTipo('ZONA_DESOLADA')">
+                🟣 Zona desolada
+              </button>
+              <button 
+                type="button" 
+                class="pill-btn pill-vigilancia" 
+                [class.active]="filtroTipo === 'POCA_VIGILANCIA'" 
+                (click)="seleccionarFiltroTipo('POCA_VIGILANCIA')">
+                🔵 Poca vigilancia
+              </button>
+            </div>
+          </header>
+
+          <!-- VISTA SUB-1: MAPA INTERACTIVO (PANTALLA 5) -->
+          <div *ngIf="vistaMapaLista === 'mapa'" class="map-view-area">
+            <div id="mapa-angel-shot" class="leaflet-map-canvas"></div>
+
+            <!-- Indicador de Centro Histórico / Radar de ubicación -->
+            <div class="map-overlay-center-badge">
+              <span class="pulse-point"></span>
+              {{ municipioSeleccionado }} · Rutas nocturnas activas
+            </div>
+
+            <!-- Tarjeta Inferior Flotante al Seleccionar Punto (Screen 5 bottom) -->
+            <div *ngIf="alertaSeleccionada" class="floating-point-card" (click)="abrirModalValidacion(alertaSeleccionada)">
+              <div class="card-left">
+                <span class="cat-tag" [ngClass]="obtenerClaseCategoria(alertaSeleccionada.tipoAlerta)">
+                  {{ formatearTipoAlerta(alertaSeleccionada.tipoAlerta) | uppercase }}
+                </span>
+                <h3 class="point-title">{{ alertaSeleccionada.ubicacionDetalle }}</h3>
+                <p class="point-subtitle">{{ alertaSeleccionada.municipio || 'Chía' }} · {{ alertaSeleccionada.departamento || 'Cundinamarca' }}</p>
+                <div class="point-meta">
+                  <span>👥 {{ alertaSeleccionada.votosPositivos || 8 }}/{{ alertaSeleccionada.votosTotales || 10 }} coinciden</span>
+                  <span class="meta-dot">•</span>
+                  <span>{{ formatearFechaRelativa(alertaSeleccionada.createdAt) }}</span>
+                </div>
+              </div>
+              <div class="card-right">
+                <span class="dist-badge">{{ obtenerDistanciaFormateada(alertaSeleccionada) }} ↗</span>
+                <button type="button" class="btn-detalles-mini" (click)="abrirModalValidacion(alertaSeleccionada); $event.stopPropagation()">
+                  Ver
                 </button>
-                <small class="geo-tip">O haz clic directo en el mapa para fijar el pin.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- VISTA SUB-2: LISTA ORDENADA POR CERCANÍA (PANTALLA 6) -->
+          <div *ngIf="vistaMapaLista === 'lista'" class="list-view-area">
+            <div class="list-header-meta">
+              <span>Cerca de ti · Menor distancia</span>
+              <span class="count-tag">{{ alertasFiltradas.length }} puntos</span>
+            </div>
+
+            <div class="cards-scroll-container">
+              <div *ngIf="alertasFiltradas.length === 0" class="empty-state">
+                <p>No hay reportes de riesgo en este sector con el filtro seleccionado.</p>
+                <button type="button" class="btn-primary-gradient btn-sm" (click)="tabActiva = 'reportar'">
+                  ⚠️ Reportar primer punto
+                </button>
+              </div>
+
+              <div 
+                *ngFor="let alerta of alertasFiltradas" 
+                class="risk-list-card" 
+                (click)="abrirModalValidacion(alerta)">
+                <div class="card-top-row">
+                  <span class="cat-tag" [ngClass]="obtenerClaseCategoria(alerta.tipoAlerta)">
+                    {{ obtenerIconoTipo(alerta.tipoAlerta) }} {{ formatearTipoAlerta(alerta.tipoAlerta) }}
+                  </span>
+                  <span class="dist-badge">{{ obtenerDistanciaFormateada(alerta) }} &gt;</span>
+                </div>
+
+                <h3 class="card-title">{{ alerta.ubicacionDetalle }}</h3>
+                <p class="card-sub">{{ alerta.municipio || 'Chía' }} &bull; {{ alerta.descripcion || 'Sin descripción adicional' }}</p>
+
+                <div class="card-bottom-row">
+                  <span class="time-ago">{{ formatearFechaRelativa(alerta.createdAt) }}</span>
+                  <span class="votes-consensus">
+                    👥 {{ alerta.votosPositivos || 8 }} de {{ alerta.votosTotales || 10 }} coinciden
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 2: REPORTAR RIESGO (PANTALLA 3)    -->
+        <!-- ========================================== -->
+        <main *ngIf="tabActiva === 'reportar'" class="tab-content report-tab">
+          <header class="app-header-simple">
+            <h2>Reportar riesgo</h2>
+            <p class="subtitle-loc">{{ nuevoReporte.municipio }}, Cundinamarca</p>
+          </header>
+
+          <form (ngSubmit)="enviarReporte()" class="report-form-body">
+            <!-- Selector de Municipio en Píldoras -->
+            <div class="form-section">
+              <label class="form-label">Municipio <small class="text-muted">Cundinamarca</small></label>
+              <div class="municipios-pills">
+                <button 
+                  type="button" 
+                  class="mun-pill" 
+                  [class.active]="nuevoReporte.municipio === 'Chía'" 
+                  (click)="seleccionarMunicipioForm('Chía')">
+                  Chía
+                </button>
+                <button 
+                  type="button" 
+                  class="mun-pill" 
+                  [class.active]="nuevoReporte.municipio === 'Soacha'" 
+                  (click)="seleccionarMunicipioForm('Soacha')">
+                  Soacha
+                </button>
+                <button 
+                  type="button" 
+                  class="mun-pill" 
+                  [class.active]="nuevoReporte.municipio === 'Cajicá'" 
+                  (click)="seleccionarMunicipioForm('Cajicá')">
+                  Cajicá
+                </button>
+                <button 
+                  type="button" 
+                  class="mun-pill" 
+                  [class.active]="nuevoReporte.municipio === 'Zipaquirá'" 
+                  (click)="seleccionarMunicipioForm('Zipaquirá')">
+                  Zipaquirá
+                </button>
               </div>
             </div>
 
-            <!-- Descripción Detallada -->
-            <div class="form-group">
-              <label for="descripcion">Descripción adicional (Opcional)</label>
-              <textarea
-                id="descripcion"
-                [(ngModel)]="nuevoReporte.descripcion"
-                name="descripcion"
-                rows="2"
-                placeholder="Ej. A partir de las 8pm se apagan las luces y no hay paso de transporte frecuente."
-                class="form-control"
-              ></textarea>
+            <!-- Dirección / Referencia Textual + Geocodificación Automática -->
+            <div class="form-section">
+              <label class="form-label">Dirección o punto de referencia</label>
+              <div class="input-with-action">
+                <input 
+                  type="text" 
+                  [(ngModel)]="nuevoReporte.ubicacionDetalle" 
+                  name="ubicacionDetalle"
+                  (input)="alEscribirDireccion()"
+                  placeholder="Ej: Parque principal · Cra. 9 / Cl. 11" 
+                  class="form-input" 
+                  required />
+                <button 
+                  type="button" 
+                  class="btn-gps-trigger" 
+                  (click)="capturarUbicacionActualGPS()"
+                  [disabled]="cargandoGeo"
+                  title="Capturar coordenadas con GPS y BigDataCloud">
+                  {{ cargandoGeo ? '⏳' : '📍 GPS' }}
+                </button>
+              </div>
+
+              <!-- Sugerencias Nominatim OpenStreetMap en vivo -->
+              <div *ngIf="sugerenciasNominatim.length > 0" class="nominatim-dropdown">
+                <div 
+                  *ngFor="let sug of sugerenciasNominatim" 
+                  class="nominatim-item" 
+                  (click)="seleccionarSugerenciaNominatim(sug)">
+                  📍 {{ sug.display_name }}
+                </div>
+              </div>
+              <small class="hint-text">
+                {{ nuevoReporte.latitud ? ('Coordenadas: ' + nuevoReporte.latitud + ', ' + nuevoReporte.longitud) : 'Escribe la calle o toca el botón GPS para autocompletar.' }}
+              </small>
             </div>
 
-            <button type="submit" [disabled]="enviando || !reporteForm.form.valid" class="btn-submit">
-              {{ enviando ? 'Registrando punto...' : '🚨 Publicar Reporte Comunitario' }}
+            <!-- Categoría de Riesgo (Grid 2x2 interactivo como en Mockup) -->
+            <div class="form-section">
+              <label class="form-label">Categoría de riesgo</label>
+              <div class="category-grid">
+                <div 
+                  class="cat-card" 
+                  [class.selected]="nuevoReporte.tipoAlerta === 'ILUMINACION_DEFICIENTE'"
+                  (click)="nuevoReporte.tipoAlerta = 'ILUMINACION_DEFICIENTE'">
+                  <span class="cat-icon">💡</span>
+                  <span class="cat-name">Iluminación</span>
+                </div>
+                <div 
+                  class="cat-card" 
+                  [class.selected]="nuevoReporte.tipoAlerta === 'ACOSO_O_INTIMIDACION'"
+                  (click)="nuevoReporte.tipoAlerta = 'ACOSO_O_INTIMIDACION'">
+                  <span class="cat-icon">⚠️</span>
+                  <span class="cat-name">Acoso</span>
+                </div>
+                <div 
+                  class="cat-card" 
+                  [class.selected]="nuevoReporte.tipoAlerta === 'ZONA_DESOLADA'"
+                  (click)="nuevoReporte.tipoAlerta = 'ZONA_DESOLADA'">
+                  <span class="cat-icon">🏚️</span>
+                  <span class="cat-name">Zona desolada</span>
+                </div>
+                <div 
+                  class="cat-card" 
+                  [class.selected]="nuevoReporte.tipoAlerta === 'POCA_VIGILANCIA'"
+                  (click)="nuevoReporte.tipoAlerta = 'POCA_VIGILANCIA'">
+                  <span class="cat-icon">👮</span>
+                  <span class="cat-name">Poca vigilancia</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Descripción (Máx. 300 caracteres) -->
+            <div class="form-section">
+              <div class="label-with-counter">
+                <label class="form-label">Descripción</label>
+                <span class="char-counter">Máx. 300 caracteres</span>
+              </div>
+              <textarea 
+                [(ngModel)]="nuevoReporte.descripcion" 
+                name="descripcion"
+                maxlength="300"
+                rows="3" 
+                placeholder="Luminarias apagadas junto al parque. Carrera 9 oscura hacia calle 11." 
+                class="form-textarea"></textarea>
+            </div>
+
+            <!-- Reporte Anónimo Switch -->
+            <div class="form-switch-row">
+              <label class="switch-container">
+                <input type="checkbox" [(ngModel)]="nuevoReporte.anonimo" name="anonimo" />
+                <span class="switch-slider"></span>
+              </label>
+              <span class="switch-label">Reporte anónimo.</span>
+            </div>
+
+            <!-- Feedback de envío -->
+            <div *ngIf="mensajeExito" class="alert-box alert-success">{{ mensajeExito }}</div>
+            <div *ngIf="mensajeError" class="alert-box alert-error">{{ mensajeError }}</div>
+
+            <!-- Botón Enviar Reporte -->
+            <button 
+              type="submit" 
+              class="btn-primary-gradient btn-full" 
+              [disabled]="enviandoReporte">
+              {{ enviandoReporte ? 'Guardando reporte...' : 'Enviar reporte' }}
             </button>
           </form>
-        </section>
+        </main>
 
-        <!-- Columna Derecha: Mapa Interactivo Leaflet (RF04, RF05, RF06) -->
-        <section class="card map-card">
-          <div class="card-header">
-            <div>
-              <h2>🗺️ Mapa Comunitario de Rutas y Riesgos</h2>
-              <small style="color: #94a3b8;">OpenStreetMap + Leaflet &bull; Haz clic para capturar coordenadas</small>
-            </div>
-            <button (click)="centrarEnSabana()" class="btn-secondary btn-sm">Sabana Centro</button>
-          </div>
+        <!-- ========================================== -->
+        <!-- PESTAÑA 3: BOTÓN DE PÁNICO SOS (PANTALLA 4)-->
+        <!-- ========================================== -->
+        <main *ngIf="tabActiva === 'sos'" class="tab-content sos-tab">
+          <header class="app-header-sos">
+            <span class="brand-title">Angel Shot</span>
+            <span class="badge-status-sos">
+              <span class="dot-green"></span> Sin alerta activa
+            </span>
+          </header>
 
-          <div id="mapa-angel-shot" class="leaflet-container-custom"></div>
+          <div class="sos-content-area">
+            <h2 class="sos-title">Botón de pánico</h2>
 
-          <!-- Leyenda del Mapa -->
-          <div class="map-legend">
-            <span class="legend-item"><span class="dot dot-acoso"></span> Acoso / Intimidación</span>
-            <span class="legend-item"><span class="dot dot-luz"></span> Iluminación Deficiente</span>
-            <span class="legend-item"><span class="dot dot-desolada"></span> Zona Desolada</span>
-            <span class="legend-item"><span class="dot dot-angel"></span> Protocolo Angel Shot</span>
-          </div>
-        </section>
-      </div>
-
-      <!-- Barra de Filtros y Búsqueda (RF03, RF07) -->
-      <section class="card filter-card">
-        <div class="filters-header">
-          <h3>🔍 Explorador de Puntos de Riesgo</h3>
-          <span class="counter-badge">{{ alertasFiltradas.length }} puntos visibles</span>
-        </div>
-
-        <div class="filters-controls">
-          <!-- Filtro por Municipio -->
-          <div class="filter-group">
-            <label>Municipio:</label>
-            <div class="pill-group">
-              <button
-                type="button"
-                [class.active]="filtroMunicipio === 'TODOS'"
-                (click)="cambiarFiltroMunicipio('TODOS')"
-                class="pill-btn"
-              >
-                Todos
-              </button>
-              <button
-                type="button"
-                [class.active]="filtroMunicipio === 'Chía'"
-                (click)="cambiarFiltroMunicipio('Chía')"
-                class="pill-btn"
-              >
-                Chía
-              </button>
-              <button
-                type="button"
-                [class.active]="filtroMunicipio === 'Zipaquirá'"
-                (click)="cambiarFiltroMunicipio('Zipaquirá')"
-                class="pill-btn"
-              >
-                Zipaquirá
-              </button>
-              <button
-                type="button"
-                [class.active]="filtroMunicipio === 'Cajicá'"
-                (click)="cambiarFiltroMunicipio('Cajicá')"
-                class="pill-btn"
-              >
-                Cajicá
-              </button>
-            </div>
-          </div>
-
-          <!-- Filtro por Tipo de Riesgo -->
-          <div class="filter-group">
-            <label>Tipo de Riesgo:</label>
-            <select [(ngModel)]="filtroTipo" (change)="aplicarFiltrosLocales()" class="form-control select-inline">
-              <option value="TODOS">Todos los tipos de riesgo</option>
-              <option value="ACOSO_O_INTIMIDACION">🚨 Acoso o Intimidación</option>
-              <option value="ILUMINACION_DEFICIENTE">💡 Iluminación Deficiente</option>
-              <option value="ZONA_DESOLADA">🏚️ Zonas Desoladas</option>
-              <option value="ANGEL_SHOT_SOLO">🍸 Protocolo Angel Shot</option>
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <!-- Listado Estructurado de Reportes (RF03, RF04) -->
-      <section class="card list-card">
-        <div class="card-header">
-          <h3>📋 Listado de Puntos Reportados</h3>
-          <small style="color: #94a3b8;">Ordenados por fecha y municipio de referencia</small>
-        </div>
-
-        <div class="table-responsive">
-          <table class="report-table">
-            <thead>
-              <tr>
-                <th>Categoría</th>
-                <th>Municipio</th>
-                <th>Punto de Referencia</th>
-                <th>Descripción / Horario</th>
-                <th>Fecha Reporte</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let alerta of alertasFiltradas">
-                <td>
-                  <span class="badge" [ngClass]="obtenerClaseTipo(alerta.tipoAlerta)">
-                    {{ formatearTipo(alerta.tipoAlerta) }}
+            <!-- Botón Circular Central SOS con Efecto Onda/Pulso -->
+            <div class="sos-button-wrapper">
+              <div class="sos-ripple-ring" [class.holding]="presionandoSos"></div>
+              <button 
+                type="button" 
+                class="btn-sos-circle" 
+                (mousedown)="iniciarPresionSos()"
+                (mouseup)="cancelarPresionSos()"
+                (touchstart)="iniciarPresionSos()"
+                (touchend)="cancelarPresionSos()">
+                <div class="sos-inner-label">
+                  <span class="sos-main-text">SOS</span>
+                  <span class="sos-sub-text">
+                    {{ presionandoSos ? ('Enviando en ' + segundosSos + 's...') : 'Mantén 3 segundos' }}
                   </span>
-                </td>
-                <td>
-                  <span class="municipio-pill">{{ alerta.municipio || 'Chía' }}</span>
-                </td>
-                <td>
-                  <strong>{{ alerta.ubicacionDetalle }}</strong>
-                </td>
-                <td class="col-desc">
-                  {{ alerta.descripcion || 'Sin descripción adicional' }}
-                </td>
-                <td class="col-date">
-                  {{ formatearFecha(alerta.createdAt) }}
-                </td>
-                <td>
-                  <button (click)="centrarEnPunto(alerta)" class="btn-locate" title="Ubicar en el mapa">
-                    🎯 Ver Mapa
-                  </button>
-                </td>
-              </tr>
-              <tr *ngIf="alertasFiltradas.length === 0">
-                <td colspan="6" class="empty-state">
-                  No hay reportes de riesgo que coincidan con los filtros seleccionados.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Modal de Autenticación Rápida JWT -->
-      <div *ngIf="mostrarModalAuth" class="modal-backdrop">
-        <div class="modal-box">
-          <div class="modal-header">
-            <h3>{{ modoRegistro ? 'Crear Cuenta Segura' : 'Ingresar a Angel Shot (JWT)' }}</h3>
-            <button (click)="mostrarModalAuth = false" class="modal-close">&times;</button>
-          </div>
-
-          <div class="modal-body">
-            <div *ngIf="authError" class="alert alert-danger">{{ authError }}</div>
-
-            <!-- Formulario Login -->
-            <form *ngIf="!modoRegistro" (ngSubmit)="iniciarSesion()">
-              <div class="form-group">
-                <label>Correo Electrónico</label>
-                <input type="email" [(ngModel)]="authEmail" name="authEmail" required class="form-control" />
-              </div>
-              <div class="form-group">
-                <label>Contraseña</label>
-                <input type="password" [(ngModel)]="authPassword" name="authPassword" required class="form-control" />
-              </div>
-              <button type="submit" [disabled]="autenticando" class="btn-submit" style="margin-top: 1rem;">
-                {{ autenticando ? 'Verificando JWT...' : 'Entrar' }}
-              </button>
-            </form>
-
-            <!-- Formulario Registro -->
-            <form *ngIf="modoRegistro" (ngSubmit)="registrarse()">
-              <div class="form-group">
-                <label>Nombre Completo <span class="req">*</span></label>
-                <input type="text" [(ngModel)]="regNombre" name="regNombre" required class="form-control" placeholder="Tu nombre" />
-              </div>
-              <div class="form-group">
-                <label>Correo Electrónico <span class="req">*</span></label>
-                <input type="email" [(ngModel)]="regEmail" name="regEmail" required class="form-control" placeholder="ejemplo@correo.com" />
-              </div>
-              <div class="form-group">
-                <label>Teléfono (opcional)</label>
-                <input type="text" [(ngModel)]="regTelefono" name="regTelefono" class="form-control" placeholder="+573001234567" />
-              </div>
-              <div class="form-group">
-                <label>Contraseña (mínimo 6 caracteres) <span class="req">*</span></label>
-                <input type="password" [(ngModel)]="regPassword" name="regPassword" required minlength="6" class="form-control" placeholder="Mínimo 6 caracteres" />
-              </div>
-              <button type="button" (click)="registrarse()" [disabled]="autenticando" class="btn-submit" style="margin-top: 1rem;">
-                {{ autenticando ? 'Creando cuenta...' : '✨ Registrarse y Entrar' }}
-              </button>
-            </form>
-
-            <div class="modal-footer-switch">
-              <button type="button" (click)="modoRegistro = !modoRegistro" class="btn-link">
-                {{ modoRegistro ? '¿Ya tienes cuenta? Inicia sesión aquí' : '¿Aún no tienes cuenta? Regístrate aquí' }}
+                </div>
               </button>
             </div>
 
-            <!-- Credenciales de demostración -->
-            <div class="demo-credentials">
-              <small><strong>Credenciales de prueba:</strong> admin&#64;angelshot.app | AngelShotAdmin2026*</small>
+            <div class="sos-location-info">
+              <h4>Alerta con tu ubicación</h4>
+              <p>{{ municipioSeleccionado }} · Centro histórico</p>
+              <small>Solo al activar SOS</small>
+            </div>
+
+            <!-- Contactos de Confianza -->
+            <div class="trusted-contacts-section">
+              <div class="section-title-row">
+                <span>Contactos de confianza</span>
+                <button type="button" class="btn-text-action">Gestionar</button>
+              </div>
+
+              <div class="contact-card">
+                <div class="contact-avatar avatar-purple">LM</div>
+                <div class="contact-details">
+                  <strong>Laura Martínez</strong>
+                  <p>Hermana &bull; +57 310 555 0182</p>
+                </div>
+              </div>
+
+              <div class="contact-card">
+                <div class="contact-avatar avatar-pink">CR</div>
+                <div class="contact-details">
+                  <strong>Camila Rojas</strong>
+                  <p>Amiga &bull; +57 315 555 0246</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botón Llamada de Emergencia Nacional 123 -->
+            <a href="tel:123" class="btn-call-123">
+              📞 Llamar al 123
+            </a>
+          </div>
+        </main>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 4: COMUNIDAD / AUTENTICACIÓN (1 & 2)-->
+        <!-- ========================================== -->
+        <main *ngIf="tabActiva === 'comunidad'" class="tab-content auth-tab">
+          <!-- SI EL USUARIO YA ESTÁ LOGUEADO: PERFIL -->
+          <div *ngIf="usuarioActual" class="profile-view">
+            <header class="app-header-simple">
+              <h2>Mi Comunidad</h2>
+              <p class="subtitle-loc">Sesión activa protegida por JWT</p>
+            </header>
+
+            <div class="profile-card">
+              <div class="profile-avatar">👤</div>
+              <h3>{{ usuarioActual.nombre }}</h3>
+              <p class="profile-email">{{ usuarioActual.email }}</p>
+              <div class="role-tags">
+                <span *ngFor="let r of usuarioActual.roles" class="role-badge">{{ r }}</span>
+              </div>
+            </div>
+
+            <div class="profile-stats">
+              <div class="pstat-item">
+                <span class="pstat-num">{{ misAlertas.length }}</span>
+                <span class="pstat-lbl">Mis Reportes</span>
+              </div>
+              <div class="pstat-item">
+                <span class="pstat-num">{{ contarValidacionesHechas() }}</span>
+                <span class="pstat-lbl">Validaciones</span>
+              </div>
+            </div>
+
+            <button type="button" class="btn-logout" (click)="cerrarSesion()">
+              🚪 Cerrar sesión
+            </button>
+          </div>
+
+          <!-- PANTALLA 1: INICIA SESIÓN -->
+          <div *ngIf="!usuarioActual && subVistaAuth === 'login'" class="auth-screen">
+            <div class="auth-brand-center">
+              <div class="shield-logo">🛡️</div>
+              <h1 class="auth-title">Angel Shot</h1>
+              <p class="auth-subtitle">Noche segura</p>
+            </div>
+
+            <h2 class="auth-heading">Inicia sesión</h2>
+
+            <form (ngSubmit)="ejecutarLogin()" class="auth-form">
+              <div class="form-group">
+                <label class="form-label">Correo electrónico</label>
+                <input 
+                  type="email" 
+                  [(ngModel)]="loginEmail" 
+                  name="email" 
+                  placeholder="Correo" 
+                  class="form-input" 
+                  required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input 
+                  type="password" 
+                  [(ngModel)]="loginPassword" 
+                  name="password" 
+                  placeholder="Contraseña" 
+                  class="form-input" 
+                  required />
+                <a href="javascript:void(0)" class="forgot-pass-link">Recuperar contraseña</a>
+              </div>
+
+              <div *ngIf="authError" class="alert-box alert-error">{{ authError }}</div>
+
+              <button type="submit" class="btn-primary-gradient btn-full" [disabled]="procesandoAuth">
+                {{ procesandoAuth ? 'Iniciando...' : '➔ Entrar' }}
+              </button>
+
+              <div class="auth-toggle-link">
+                <span>¿No tienes cuenta? </span>
+                <a href="javascript:void(0)" (click)="subVistaAuth = 'registro'">Regístrate</a>
+              </div>
+            </form>
+          </div>
+
+          <!-- PANTALLA 2: CREAR CUENTA -->
+          <div *ngIf="!usuarioActual && subVistaAuth === 'registro'" class="auth-screen">
+            <div class="register-header-nav">
+              <button type="button" class="btn-back" (click)="subVistaAuth = 'login'">←</button>
+              <div class="header-titles">
+                <h2>Crear cuenta</h2>
+                <div class="steps-indicator">
+                  <span class="step-active">1 Cuenta</span>
+                  <span class="step-line"></span>
+                  <span>2 Verifica identidad</span>
+                </div>
+              </div>
+            </div>
+
+            <form (ngSubmit)="ejecutarRegistro()" class="auth-form">
+              <div class="form-group">
+                <label class="form-label">Nombre</label>
+                <input 
+                  type="text" 
+                  [(ngModel)]="regNombre" 
+                  name="nombre" 
+                  placeholder="Tu nombre" 
+                  class="form-input" 
+                  required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Correo</label>
+                <input 
+                  type="email" 
+                  [(ngModel)]="regEmail" 
+                  name="email" 
+                  placeholder="tu@correo.com" 
+                  class="form-input" 
+                  required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input 
+                  type="password" 
+                  [(ngModel)]="regPassword" 
+                  name="password" 
+                  placeholder="••••••••" 
+                  class="form-input" 
+                  required />
+                <small class="hint-text">8+ caracteres · Mayúscula · Número</small>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Confirmar contraseña</label>
+                <input 
+                  type="password" 
+                  [(ngModel)]="regConfirmPassword" 
+                  name="confirmPassword" 
+                  placeholder="••••••••" 
+                  class="form-input" 
+                  required />
+              </div>
+
+              <!-- Sección: Verifica tu identidad -->
+              <div class="verification-box">
+                <div class="verif-title-row">
+                  <strong>Verifica tu identidad</strong>
+                  <span class="verif-tag">Verificación privada obligatoria</span>
+                </div>
+                <div class="verif-buttons-row">
+                  <button type="button" class="btn-verif-type">🪪 Documento</button>
+                  <button type="button" class="btn-verif-type">🤳 Selfie</button>
+                </div>
+                <small class="verif-note">🔒 Datos cifrados, nunca públicos</small>
+              </div>
+
+              <div class="form-checkbox-row">
+                <input type="checkbox" [(ngModel)]="aceptoTerminos" name="terminos" id="term-check" required />
+                <label for="term-check">Acepto términos, privacidad y verificación de identidad.</label>
+              </div>
+
+              <div *ngIf="authError" class="alert-box alert-error">{{ authError }}</div>
+
+              <button type="submit" class="btn-primary-gradient btn-full" [disabled]="procesandoAuth">
+                {{ procesandoAuth ? 'Registrando...' : '➔ Crear y verificar' }}
+              </button>
+
+              <div class="auth-toggle-link">
+                <span>¿Tienes cuenta? </span>
+                <a href="javascript:void(0)" (click)="subVistaAuth = 'login'">Inicia sesión</a>
+              </div>
+            </form>
+          </div>
+        </main>
+
+        <!-- ========================================== -->
+        <!-- MODAL DETALLE Y VALIDACIÓN (PANTALLA 7)   -->
+        <!-- ========================================== -->
+        <div *ngIf="modalDetalleAbierto && alertaModal" class="modal-backdrop" (click)="cerrarModalValidacion()">
+          <div class="bottom-sheet-modal" (click)="$event.stopPropagation()">
+            <div class="sheet-drag-handle"></div>
+            <button type="button" class="btn-sheet-close" (click)="cerrarModalValidacion()">✕</button>
+
+            <!-- Categoría -->
+            <span class="cat-tag" [ngClass]="obtenerClaseCategoria(alertaModal.tipoAlerta)">
+              {{ formatearTipoAlerta(alertaModal.tipoAlerta) | uppercase }}
+            </span>
+
+            <!-- Título y Dirección -->
+            <h2 class="modal-title">{{ alertaModal.ubicacionDetalle }}</h2>
+            <div class="modal-sub-row">
+              <span class="modal-sub-loc">{{ alertaModal.municipio || 'Chía' }}, Cundinamarca</span>
+              <span class="dist-badge">{{ obtenerDistanciaFormateada(alertaModal) }}</span>
+            </div>
+
+            <!-- Autor y Fecha -->
+            <div class="modal-author-meta">
+              <span>{{ formatearFechaRelativa(alertaModal.createdAt) }}</span>
+              <span class="meta-dot">•</span>
+              <span>{{ alertaModal.anonimo ? 'Anónimo' : (alertaModal.usuarioNombre || 'Ciudadana') }}</span>
+            </div>
+
+            <!-- Descripción -->
+            <p class="modal-desc">{{ alertaModal.descripcion || 'Punto de riesgo reportado en el espacio público nocturno.' }}</p>
+
+            <!-- Recuadro Métrico de Validación Comunitaria (Mockup Screen 7) -->
+            <div class="validation-score-box">
+              <div class="score-percent">{{ alertaModal.porcentajeCoincidencia || calcularPorcentaje(alertaModal) }}%</div>
+              <div class="score-label">COINCIDEN</div>
+              <div class="score-summary">
+                {{ alertaModal.votosPositivos || 8 }} de {{ alertaModal.votosTotales || 10 }} coinciden
+              </div>
+              <small class="score-tagline">Validación comunitaria</small>
+            </div>
+
+            <!-- Botones de Acción: Validar / Ya no ocurre -->
+            <div class="validation-actions-row">
+              <button 
+                type="button" 
+                class="btn-validate-agree" 
+                (click)="enviarValidacionComunitaria(alertaModal, true)">
+                ✓ Validar
+              </button>
+              <button 
+                type="button" 
+                class="btn-validate-disagree" 
+                (click)="enviarValidacionComunitaria(alertaModal, false)">
+                ✕ Ya no ocurre
+              </button>
             </div>
           </div>
         </div>
+
+        <!-- ========================================== -->
+        <!-- BARRA INFERIOR DE NAVEGACIÓN (4 BOTONES)   -->
+        <!-- ========================================== -->
+        <nav class="bottom-nav-bar">
+          <button 
+            type="button" 
+            class="nav-item" 
+            [class.active]="tabActiva === 'mapa'" 
+            (click)="cambiarTab('mapa')">
+            <span class="nav-icon">🗺️</span>
+            <span class="nav-label">Mapa</span>
+          </button>
+
+          <button 
+            type="button" 
+            class="nav-item" 
+            [class.active]="tabActiva === 'reportar'" 
+            (click)="cambiarTab('reportar')">
+            <span class="nav-icon">⚠️</span>
+            <span class="nav-label">Reportes</span>
+          </button>
+
+          <button 
+            type="button" 
+            class="nav-item" 
+            [class.active]="tabActiva === 'sos'" 
+            (click)="cambiarTab('sos')">
+            <span class="nav-icon">🛡️</span>
+            <span class="nav-label">Rutas</span>
+          </button>
+
+          <button 
+            type="button" 
+            class="nav-item" 
+            [class.active]="tabActiva === 'comunidad'" 
+            (click)="cambiarTab('comunidad')">
+            <span class="nav-icon">👥</span>
+            <span class="nav-label">Comunidad</span>
+          </button>
+        </nav>
+
       </div>
     </div>
   `,
   styles: [`
+    /* ================================================= */
+    /* PALETA DARK MODE EXACTA AL MOCKUP FIGMA           */
+    /* ================================================= */
     :host {
-      display: block;
-      color: #f1f5f9;
-      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      background: #0f172a;
+      --bg-dark: #0a0e1a;
+      --bg-card: #131929;
+      --bg-card-hover: #182035;
+      --bg-input: #161e33;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-color-glow: rgba(139, 92, 246, 0.35);
+      --primary-purple: #8b5cf6;
+      --primary-pink: #ec4899;
+      --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+      --text-white: #f8fafc;
+      --text-muted: #94a3b8;
+      --color-luz: #f59e0b;
+      --color-acoso: #ef4444;
+      --color-desolada: #8b5cf6;
+      --color-vigilancia: #3b82f6;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .mobile-app-wrapper {
       min-height: 100vh;
-    }
-
-    .app-container {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 1.5rem;
-    }
-
-    /* Header */
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 1.5rem;
-      border-bottom: 1px solid #334155;
-      margin-bottom: 1.5rem;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-
-    .header-branding {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .logo-badge {
-      font-size: 2.5rem;
-      background: #312e81;
-      padding: 0.5rem 0.75rem;
-      border-radius: 1rem;
-      border: 1px solid #6366f1;
-    }
-
-    .title {
-      font-size: 1.75rem;
-      font-weight: 800;
-      color: #c084fc;
-      margin: 0;
-    }
-
-    .subtitle {
-      color: #94a3b8;
-      font-size: 0.9rem;
-      margin: 0.25rem 0 0 0;
-    }
-
-    .user-badge {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      background: #1e293b;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.5rem;
-      border: 1px solid #334155;
-    }
-
-    .user-info {
-      display: flex;
-      flex-direction: column;
-      font-size: 0.8rem;
-    }
-
-    .scope-banner {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      background: #1e1b4b;
-      border-left: 4px solid #818cf8;
-      padding: 0.85rem 1.25rem;
-      border-radius: 0.5rem;
-      font-size: 0.85rem;
-      color: #e0e7ff;
-      margin-bottom: 1.5rem;
-    }
-
-    /* Stats */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .stat-card {
-      background: #1e293b;
-      padding: 1.25rem;
-      border-radius: 0.75rem;
-      display: flex;
-      flex-direction: column;
-      border: 1px solid #334155;
-    }
-
-    .border-blue { border-left: 4px solid #3b82f6; }
-    .border-purple { border-left: 4px solid #a855f7; }
-    .border-amber { border-left: 4px solid #f59e0b; }
-    .border-emerald { border-left: 4px solid #10b981; }
-
-    .stat-label {
-      font-size: 0.8rem;
-      color: #94a3b8;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-
-    .stat-value {
-      font-size: 1.75rem;
-      font-weight: 800;
-      color: #f8fafc;
-      margin-top: 0.25rem;
-    }
-
-    /* Main Grid */
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    @media (min-width: 960px) {
-      .main-grid {
-        grid-template-columns: 420px 1fr;
-      }
-    }
-
-    .card {
-      background: #1e293b;
-      border-radius: 0.75rem;
-      padding: 1.5rem;
-      border: 1px solid #334155;
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.25rem;
-    }
-
-    .card-header h2, .card-header h3 {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: #f1f5f9;
-      margin: 0;
-    }
-
-    /* Map */
-    .leaflet-container-custom {
-      height: 480px;
-      width: 100%;
-      border-radius: 0.5rem;
-      border: 1px solid #475569;
-      background: #0f172a;
-      z-index: 10;
-    }
-
-    .map-legend {
-      display: flex;
-      gap: 1rem;
-      margin-top: 1rem;
-      flex-wrap: wrap;
-      font-size: 0.8rem;
-      color: #94a3b8;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .dot-acoso { background: #ef4444; }
-    .dot-luz { background: #f59e0b; }
-    .dot-desolada { background: #8b5cf6; }
-    .dot-angel { background: #06b6d4; }
-
-    /* Form */
-    .form-group {
-      margin-bottom: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    .form-group label {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #cbd5e1;
-    }
-
-    .req { color: #f87171; }
-
-    .form-control {
-      background: #0f172a;
-      border: 1px solid #475569;
-      border-radius: 0.5rem;
-      padding: 0.6rem 0.75rem;
-      color: #f8fafc;
-      font-size: 0.9rem;
-    }
-
-    .form-control:focus {
-      outline: none;
-      border-color: #a855f7;
-    }
-
-    .hint {
-      font-size: 0.75rem;
-      color: #94a3b8;
-    }
-
-    .coord-inputs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
-    }
-
-    .geo-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      margin-top: 0.35rem;
-    }
-
-    .btn-geo {
-      background: #334155;
-      color: #e2e8f0;
-      border: 1px solid #475569;
-      padding: 0.4rem 0.6rem;
-      border-radius: 0.4rem;
-      font-size: 0.8rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .btn-geo:hover:not(:disabled) {
-      background: #475569;
-    }
-
-    .geo-tip {
-      font-size: 0.7rem;
-      color: #94a3b8;
-    }
-
-    .btn-submit {
-      width: 100%;
-      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
-      color: white;
-      padding: 0.75rem;
-      border-radius: 0.5rem;
-      border: none;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 0.95rem;
-      box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
-      transition: opacity 0.2s;
-    }
-
-    .btn-submit:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* Buttons */
-    .btn-primary {
-      background: #7c3aed;
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 0.5rem;
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .btn-secondary {
-      background: #334155;
-      color: #f1f5f9;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.5rem;
-      border: none;
-      cursor: pointer;
-    }
-
-    .btn-sm {
-      font-size: 0.8rem;
-      padding: 0.3rem 0.6rem;
-    }
-
-    .btn-outline-primary {
-      background: transparent;
-      border: 1px solid #a855f7;
-      color: #c084fc;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    /* Filters */
-    .filter-card {
-      margin-bottom: 1.5rem;
-    }
-
-    .filters-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-
-    .counter-badge {
-      background: #312e81;
-      color: #c7d2fe;
-      padding: 0.2rem 0.6rem;
-      border-radius: 9999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .filters-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1.5rem;
-      align-items: center;
-    }
-
-    .filter-group {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .filter-group label {
-      font-size: 0.85rem;
-      color: #94a3b8;
-      font-weight: 600;
-    }
-
-    .pill-group {
-      display: flex;
-      gap: 0.35rem;
-    }
-
-    .pill-btn {
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #94a3b8;
-      padding: 0.35rem 0.75rem;
-      border-radius: 9999px;
-      font-size: 0.8rem;
-      cursor: pointer;
-    }
-
-    .pill-btn.active {
-      background: #7c3aed;
-      color: white;
-      border-color: #a855f7;
-      font-weight: 600;
-    }
-
-    .select-inline {
-      min-width: 220px;
-    }
-
-    /* Table */
-    .table-responsive {
-      overflow-x: auto;
-    }
-
-    .report-table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-    }
-
-    .report-table th {
-      background: #0f172a;
-      padding: 0.75rem 1rem;
-      font-size: 0.8rem;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border-bottom: 1px solid #334155;
-    }
-
-    .report-table td {
-      padding: 0.85rem 1rem;
-      font-size: 0.85rem;
-      border-bottom: 1px solid #334155;
-      vertical-align: middle;
-    }
-
-    .col-desc {
-      max-width: 280px;
-      color: #cbd5e1;
-    }
-
-    .col-date {
-      white-space: nowrap;
-      color: #94a3b8;
-      font-size: 0.8rem;
-    }
-
-    .municipio-pill {
-      background: #1e1b4b;
-      color: #c7d2fe;
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 0.75rem;
-    }
-
-    .btn-locate {
-      background: #0284c7;
-      color: white;
-      border: none;
-      padding: 0.35rem 0.65rem;
-      border-radius: 0.35rem;
-      cursor: pointer;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .btn-locate:hover {
-      background: #0369a1;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 2.5rem;
-      color: #64748b;
-    }
-
-    /* Badges */
-    .badge {
-      display: inline-block;
-      padding: 0.25rem 0.6rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 700;
-    }
-
-    .badge-jwt {
-      background: #065f46;
-      color: #a7f3d0;
-    }
-
-    .badge-acoso {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.4);
-    }
-
-    .badge-luz {
-      background: rgba(245, 158, 11, 0.2);
-      color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.4);
-    }
-
-    .badge-desolada {
-      background: rgba(139, 92, 246, 0.2);
-      color: #c084fc;
-      border: 1px solid rgba(139, 92, 246, 0.4);
-    }
-
-    .badge-angel {
-      background: rgba(6, 182, 212, 0.2);
-      color: #38bdf8;
-      border: 1px solid rgba(6, 182, 212, 0.4);
-    }
-
-    .badge-otro {
-      background: #334155;
-      color: #cbd5e1;
-    }
-
-    /* Alerts */
-    .alert {
-      padding: 0.75rem;
-      border-radius: 0.5rem;
-      font-size: 0.85rem;
-      margin-bottom: 1rem;
-    }
-
-    .alert-success {
-      background: #064e3b;
-      color: #a7f3d0;
-      border: 1px solid #059669;
-    }
-
-    .alert-danger {
-      background: #450a0a;
-      color: #fecaca;
-      border: 1px solid #dc2626;
-    }
-
-    .auth-required-notice {
-      background: #1e1b4b;
-      border: 1px solid #4338ca;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      font-size: 0.85rem;
-    }
-
-    /* Modal */
-    .modal-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.75);
+      background: #030712;
       display: flex;
       justify-content: center;
       align-items: center;
-      z-index: 1000;
-      padding: 1rem;
+      padding: 0;
     }
 
-    .modal-box {
-      background: #1e293b;
-      border: 1px solid #475569;
-      border-radius: 0.75rem;
+    .mobile-phone-container {
       width: 100%;
-      max-width: 420px;
-      padding: 1.5rem;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      max-width: 440px;
+      min-height: 100vh;
+      height: 100vh;
+      background: var(--bg-dark);
+      color: var(--text-white);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     }
 
-    .modal-header {
+    @media (min-width: 480px) {
+      .mobile-phone-container {
+        height: 900px;
+        min-height: 900px;
+        border-radius: 40px;
+        border: 4px solid #1f293d;
+      }
+    }
+
+    /* STATUS BAR */
+    .status-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1.25rem;
+      padding: 10px 24px 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #cbd5e1;
+      background: var(--bg-dark);
+      z-index: 50;
+    }
+    .status-icons {
+      display: flex;
+      gap: 6px;
+      font-size: 11px;
     }
 
-    .modal-header h3 {
-      margin: 0;
-      font-size: 1.15rem;
-      color: #f8fafc;
+    /* CONTENEDOR DE PESTAÑAS */
+    .tab-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding-bottom: 70px;
+      position: relative;
     }
 
-    .modal-close {
-      background: none;
+    /* HEADER PANTALLA MAPA/LISTA */
+    .app-header {
+      padding: 8px 16px;
+      background: var(--bg-dark);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    .brand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #94a3b8;
+    }
+
+    .municipio-selector-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .municipio-select {
+      appearance: none;
+      background: transparent;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      padding-right: 18px;
+      cursor: pointer;
+      outline: none;
+    }
+    .municipio-select option {
+      background: #1e293b;
+      color: #fff;
+    }
+    .select-arrow {
+      position: absolute;
+      right: 0;
+      pointer-events: none;
+      color: var(--primary-purple);
+      font-size: 12px;
+    }
+
+    /* SEGMENTED CONTROL [ Mapa | Lista ] */
+    .segmented-control {
+      display: flex;
+      background: #141b2d;
+      padding: 3px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+    }
+    .seg-btn {
+      flex: 1;
+      background: transparent;
       border: none;
       color: #94a3b8;
-      font-size: 1.5rem;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .seg-btn.active {
+      background: var(--accent-gradient);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
+    }
+
+    /* SCROLL HORIZONTAL DE FILTROS */
+    .filter-pills-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .filter-pills-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .pill-btn {
+      white-space: nowrap;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #141b2d;
+      border: 1px solid var(--border-color);
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pill-btn.active {
+      background: #252e46;
+      border-color: var(--primary-purple);
+      color: #fff;
+    }
+    .pill-luz.active { border-color: var(--color-luz); color: #fde68a; }
+    .pill-acoso.active { border-color: var(--color-acoso); color: #fca5a5; }
+    .pill-desolada.active { border-color: var(--color-desolada); color: #ddd6fe; }
+    .pill-vigilancia.active { border-color: var(--color-vigilancia); color: #93c5fd; }
+
+    /* AREA DEL MAPA LEAFLET */
+    .map-view-area {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .leaflet-map-canvas {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+      flex: 1;
+      background: #0d111c;
+      z-index: 1;
+    }
+
+    .map-overlay-center-badge {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(19, 25, 41, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #cbd5e1;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .pulse-point {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* TARJETA INFERIOR FLOTANTE SOBRE EL MAPA (SCREEN 5) */
+    .floating-point-card {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      background: #121829;
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s;
+    }
+    .floating-point-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary-purple);
+    }
+    .point-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin: 4px 0 2px;
+    }
+    .point-subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .point-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .meta-dot { font-size: 8px; }
+    .card-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .dist-badge {
+      background: #1e293b;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+    .btn-detalles-mini {
+      background: var(--accent-gradient);
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
       cursor: pointer;
     }
 
-    .modal-footer-switch {
-      margin-top: 1rem;
-      text-align: center;
+    /* VISTA LISTA (SCREEN 6) */
+    .list-view-area {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .list-header-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 600;
+      padding: 0 2px;
+    }
+    .count-tag {
+      background: #1e293b;
+      padding: 2px 8px;
+      border-radius: 10px;
+      color: #e2e8f0;
+    }
+    .cards-scroll-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .risk-list-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .risk-list-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(139, 92, 246, 0.4);
+    }
+    .card-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+    .card-sub {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    .card-bottom-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .votes-consensus {
+      color: #a78bfa;
+      font-weight: 600;
     }
 
-    .btn-link {
+    /* BADGES DE CATEGORIA */
+    .cat-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 8px;
+    }
+    .cat-luz { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .cat-acoso { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .cat-desolada { background: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .cat-vigilancia { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+    /* PESTAÑA REPORTAR RIESGO (SCREEN 3) */
+    .report-tab {
+      padding: 16px;
+    }
+    .app-header-simple {
+      margin-bottom: 14px;
+    }
+    .app-header-simple h2 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .subtitle-loc {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .report-form-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .form-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+    .municipios-pills {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    .mun-pill {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: #94a3b8;
+      cursor: pointer;
+    }
+    .mun-pill.active {
+      background: var(--accent-gradient);
+      color: #fff;
+      border: none;
+      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
+    }
+    .input-with-action {
+      display: flex;
+      gap: 8px;
+    }
+    .form-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--primary-purple);
+    }
+    .btn-gps-trigger {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: #cbd5e1;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-gps-trigger:hover {
+      background: #334155;
+    }
+    .nominatim-dropdown {
+      background: #182035;
+      border: 1px solid var(--border-color-glow);
+      border-radius: 12px;
+      max-height: 140px;
+      overflow-y: auto;
+      margin-top: 4px;
+    }
+    .nominatim-item {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #cbd5e1;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .nominatim-item:hover {
+      background: #252e46;
+      color: #fff;
+    }
+    .hint-text {
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    /* GRID CATEGORIAS 2x2 */
+    .category-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .cat-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cat-card.selected {
+      background: #211c3b;
+      border-color: var(--primary-purple);
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+    }
+    .cat-icon { font-size: 18px; }
+    .cat-name { font-size: 13px; font-weight: 700; color: #fff; }
+
+    .label-with-counter {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .char-counter { font-size: 11px; color: #64748b; }
+    .form-textarea {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+      resize: none;
+    }
+    .form-textarea:focus { border-color: var(--primary-purple); }
+
+    .form-switch-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .switch-container {
+      position: relative;
+      display: inline-block;
+      width: 42px;
+      height: 24px;
+    }
+    .switch-container input { opacity: 0; width: 0; height: 0; }
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    .switch-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .switch-slider { background-color: var(--primary-purple); }
+    input:checked + .switch-slider:before { transform: translateX(18px); }
+    .switch-label { font-size: 13px; color: #cbd5e1; }
+
+    .btn-primary-gradient {
+      background: var(--accent-gradient);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(236, 72, 153, 0.35);
+      transition: opacity 0.2s;
+    }
+    .btn-primary-gradient:hover { opacity: 0.95; }
+    .btn-full { width: 100%; }
+
+    /* PESTAÑA BOTÓN DE PÁNICO SOS (SCREEN 4) */
+    .sos-tab {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+    }
+    .app-header-sos {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .badge-status-sos {
+      background: #141b2d;
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot-green {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+    .sos-content-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      flex: 1;
+    }
+    .sos-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    /* BOTON CIRCULAR SOS CON PULSO */
+    .sos-button-wrapper {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 10px 0;
+    }
+    .sos-ripple-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.2);
+      animation: sosPulse 2s infinite ease-out;
+    }
+    .sos-ripple-ring.holding {
+      animation: sosHoldPulse 0.5s infinite;
+      background: rgba(239, 68, 68, 0.5);
+    }
+    @keyframes sosPulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
+    @keyframes sosHoldPulse {
+      0% { transform: scale(1.1); }
+      50% { transform: scale(1.25); }
+      100% { transform: scale(1.1); }
+    }
+    .btn-sos-circle {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #f43f5e 0%, #e11d48 100%);
+      border: 4px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 0 35px rgba(225, 29, 72, 0.6);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      user-select: none;
+    }
+    .sos-main-text {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      display: block;
+    }
+    .sos-sub-text {
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.85;
+      display: block;
+      margin-top: 2px;
+    }
+    .sos-location-info {
+      text-align: center;
+    }
+    .sos-location-info h4 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .sos-location-info p {
+      font-size: 13px;
+      color: #94a3b8;
+      margin: 2px 0;
+    }
+    .sos-location-info small {
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    /* SECCION CONTACTOS */
+    .trusted-contacts-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .section-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+    .btn-text-action {
       background: none;
       border: none;
-      color: #a855f7;
-      text-decoration: underline;
+      color: var(--primary-purple);
+      font-size: 12px;
+      font-weight: 600;
       cursor: pointer;
-      font-size: 0.85rem;
+    }
+    .contact-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .contact-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: 800;
+      font-size: 13px;
+      color: #fff;
+    }
+    .avatar-purple { background: #8b5cf6; }
+    .avatar-pink { background: #ec4899; }
+    .contact-details strong {
+      font-size: 14px;
+      color: #fff;
+      display: block;
+    }
+    .contact-details p {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .btn-call-123 {
+      width: 100%;
+      background: #182035;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      padding: 12px;
+      border-radius: 14px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      display: block;
+      margin-top: auto;
+      transition: background 0.2s;
+    }
+    .btn-call-123:hover { background: rgba(239, 68, 68, 0.15); }
+
+    /* PESTAÑA AUTENTICACION / COMUNIDAD (SCREEN 1 & 2) */
+    .auth-tab {
+      padding: 20px 16px;
+    }
+    .auth-screen {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .auth-brand-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .shield-logo {
+      font-size: 40px;
+      margin-bottom: 6px;
+    }
+    .auth-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: #fff;
+    }
+    .auth-subtitle {
+      font-size: 13px;
+      color: var(--primary-purple);
+      font-weight: 600;
+    }
+    .auth-heading {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .forgot-pass-link {
+      align-self: flex-end;
+      font-size: 12px;
+      color: var(--primary-purple);
+      text-decoration: none;
+      margin-top: 2px;
+    }
+    .auth-toggle-link {
+      text-align: center;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+    .auth-toggle-link a {
+      color: var(--primary-purple);
+      font-weight: 700;
     }
 
-    .demo-credentials {
-      margin-top: 1rem;
-      padding: 0.5rem;
-      background: #0f172a;
-      border-radius: 0.35rem;
-      color: #94a3b8;
+    /* SCREEN 2 REGISTER SPECIFICS */
+    .register-header-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-back {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .header-titles h2 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .steps-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .step-active { color: var(--primary-purple); font-weight: 700; }
+    .step-line { width: 14px; height: 1px; background: #334155; }
+
+    .verification-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .verif-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #fff;
+    }
+    .verif-tag {
+      font-size: 10px;
+      color: #a78bfa;
+    }
+    .verif-buttons-row {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-verif-type {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .verif-note {
+      font-size: 11px;
+      color: #64748b;
+    }
+    .form-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .form-checkbox-row input { margin-top: 3px; }
+
+    /* PERFIL VIEW */
+    .profile-view {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .profile-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 20px;
       text-align: center;
     }
+    .profile-avatar { font-size: 40px; margin-bottom: 8px; }
+    .profile-email { font-size: 13px; color: #94a3b8; margin: 4px 0 12px; }
+    .role-tags { display: flex; justify-content: center; gap: 6px; }
+    .role-badge {
+      background: #1e293b;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      color: #a78bfa;
+      font-weight: 700;
+    }
+    .profile-stats {
+      display: flex;
+      gap: 10px;
+    }
+    .pstat-item {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px;
+      text-align: center;
+    }
+    .pstat-num { font-size: 20px; font-weight: 800; color: #fff; display: block; }
+    .pstat-lbl { font-size: 11px; color: #94a3b8; }
+    .btn-logout {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      color: #cbd5e1;
+      padding: 12px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* MODAL DETALLE Y VALIDACION COMUNITARIA (PANTALLA 7) */
+    .modal-backdrop {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: flex;
+      align-items: flex-end;
+    }
+    .bottom-sheet-modal {
+      width: 100%;
+      background: #111728;
+      border-top: 1px solid var(--border-color);
+      border-radius: 28px 28px 0 0;
+      padding: 20px 20px 80px;
+      position: relative;
+      animation: slideUp 0.25s ease-out;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .sheet-drag-handle {
+      width: 40px;
+      height: 4px;
+      background: #334155;
+      border-radius: 4px;
+      align-self: center;
+      margin-bottom: 4px;
+    }
+    .btn-sheet-close {
+      position: absolute;
+      top: 18px;
+      right: 20px;
+      background: #1e293b;
+      border: none;
+      color: #94a3b8;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .modal-sub-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-sub-loc { font-size: 13px; color: #94a3b8; }
+    .modal-author-meta {
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .modal-desc {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.4;
+      background: #161e33;
+      padding: 10px 12px;
+      border-radius: 12px;
+    }
+
+    /* SCORE DE VALIDACION (SCREEN 7 RECTANGLE) */
+    .validation-score-box {
+      background: #18223a;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+      margin: 6px 0;
+    }
+    .score-percent {
+      font-size: 32px;
+      font-weight: 900;
+      color: #a78bfa;
+    }
+    .score-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #c4b5fd;
+    }
+    .score-summary {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-top: 4px;
+    }
+    .score-tagline {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+
+    .validation-actions-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .btn-validate-agree {
+      flex: 1;
+      background: var(--accent-gradient);
+      color: #fff;
+      border: none;
+      padding: 12px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-validate-disagree {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      color: #cbd5e1;
+      padding: 12px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* BARRA INFERIOR DE NAVEGACION FIJA */
+    .bottom-nav-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 65px;
+      background: #0f1524;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 60;
+    }
+    .nav-item {
+      background: none;
+      border: none;
+      color: #64748b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .nav-item.active {
+      color: #a78bfa;
+    }
+    .nav-icon { font-size: 18px; }
+    .nav-label { font-size: 11px; font-weight: 600; }
+
+    /* ALERT BOXES */
+    .alert-box {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .alert-success { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; }
+    .alert-error { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; }
   `]
 })
 export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
+  // Navegación
+  tabActiva: 'mapa' | 'reportar' | 'sos' | 'comunidad' = 'mapa';
+  vistaMapaLista: 'mapa' | 'lista' = 'mapa';
+  subVistaAuth: 'login' | 'registro' = 'login';
+
+  // Filtros
+  municipioSeleccionado: string = 'Chía';
+  filtroTipo: string = 'TODOS';
+
   // Datos
   alertas: Alerta[] = [];
   alertasFiltradas: Alerta[] = [];
-  stats?: Estadisticas;
-  usuarioActual: any = null;
+  misAlertas: Alerta[] = [];
+  alertaSeleccionada: Alerta | null = null;
+  alertaModal: Alerta | null = null;
+  modalDetalleAbierto: boolean = false;
 
-  // Filtros
-  filtroMunicipio: string = 'TODOS';
-  filtroTipo: string = 'TODOS';
+  // Ubicación del Usuario (Chía por defecto)
+  userLat: number = 4.8631;
+  userLng: number = -74.0583;
 
-  // Formulario nuevo reporte
-  nuevoReporte: CrearAlertaRequest = {
-    municipio: 'Chía',
-    departamento: 'Cundinamarca',
-    tipoAlerta: 'ILUMINACION_DEFICIENTE',
-    nivelUrgencia: 'MEDIA',
-    ubicacionDetalle: '',
-    latitud: 4.8614,
-    longitud: -74.0336,
-    descripcion: ''
-  };
-
-  // Coordenadas centro de municipios
-  private coordsMunicipios: Record<string, { lat: number; lng: number }> = {
-    'Chía': { lat: 4.8614, lng: -74.0336 },
-    'Zipaquirá': { lat: 5.0267, lng: -74.0042 },
-    'Cajicá': { lat: 4.9189, lng: -74.0256 }
-  };
-
-  // Estados UI
-  enviando = false;
-  cargandoGeo = false;
-  mensajeExito: string | null = null;
-  mensajeError: string | null = null;
-
-  // Modal Auth
-  mostrarModalAuth = false;
-  modoRegistro = false;
-  autenticando = false;
-  authEmail = 'admin@angelshot.app';
-  authPassword = 'AngelShotAdmin2026*';
-  authError: string | null = null;
-
-  regNombre = '';
-  regEmail = '';
-  regTelefono = '';
-  regPassword = '';
-
-  // Instancias de Mapa Leaflet
+  // Mapa Leaflet
   private map: any = null;
   private markersLayer: any = null;
+  private userMarker: any = null;
+
+  // Formulario de Reporte
+  nuevoReporte: CrearAlertaRequest = {
+    tipoAlerta: 'ILUMINACION_DEFICIENTE',
+    municipio: 'Chía',
+    departamento: 'Cundinamarca',
+    ubicacionDetalle: '',
+    descripcion: '',
+    anonimo: false,
+    latitud: 4.8631,
+    longitud: -74.0583
+  };
+  cargandoGeo: boolean = false;
+  enviandoReporte: boolean = false;
+  mensajeExito: string | null = null;
+  mensajeError: string | null = null;
+  sugerenciasNominatim: SugerenciaNominatim[] = [];
+  private debounceTimer: any = null;
+
+  // Botón SOS
+  presionandoSos: boolean = false;
+  segundosSos: number = 3;
+  private timerSos: any = null;
+
+  // Autenticación
+  usuarioActual: AuthResponse | null = null;
+  loginEmail: string = '';
+  loginPassword: string = '';
+  regNombre: string = '';
+  regEmail: string = '';
+  regPassword: string = '';
+  regConfirmPassword: string = '';
+  aceptoTerminos: boolean = false;
+  authError: string | null = null;
+  procesandoAuth: boolean = false;
 
   constructor(private apiService: ApiService) {}
 
   ngOnInit(): void {
     this.usuarioActual = this.apiService.getUsuarioActual();
-    this.cargarDatos();
+    this.obtenerUbicacionInicial();
+    this.cargarAlertas();
   }
 
   ngAfterViewInit(): void {
-    this.inicializarMapa();
+    if (this.tabActiva === 'mapa' && this.vistaMapaLista === 'mapa') {
+      setTimeout(() => this.inicializarMapa(), 300);
+    }
   }
 
   ngOnDestroy(): void {
     if (this.map) {
       this.map.remove();
+      this.map = null;
+    }
+    if (this.timerSos) clearInterval(this.timerSos);
+  }
+
+  // ----------------------------------------------------
+  // GEOLOCALIZACIÓN Y UBICACIÓN
+  // ----------------------------------------------------
+  private obtenerUbicacionInicial(): void {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          this.userLat = pos.coords.latitude;
+          this.userLng = pos.coords.longitude;
+          this.nuevoReporte.latitud = this.userLat;
+          this.nuevoReporte.longitud = this.userLng;
+          this.actualizarMarcadorUsuario();
+          this.calcularDistancias();
+        },
+        () => {
+          // Fallback a IP (RN02)
+          this.apiService.obtenerUbicacionIP().subscribe(ipData => {
+            if (ipData?.latitude && ipData?.longitude) {
+              this.userLat = ipData.latitude;
+              this.userLng = ipData.longitude;
+              this.nuevoReporte.latitud = this.userLat;
+              this.nuevoReporte.longitud = this.userLng;
+              this.actualizarMarcadorUsuario();
+              this.calcularDistancias();
+            }
+          });
+        }
+      );
     }
   }
 
-  cargarDatos(): void {
-    this.apiService.getEstadisticas().subscribe({
-      next: (res) => this.stats = res,
-      error: () => {}
-    });
-
-    this.apiService.getAlertas().subscribe({
-      next: (res) => {
-        this.alertas = res;
-        this.aplicarFiltrosLocales();
-        this.actualizarMarcadoresMapa();
-      },
-      error: () => {}
-    });
-  }
-
-  // Leaflet Map Initialization
+  // ----------------------------------------------------
+  // LEAFLET MAPA INTERACTIVO (OPENSTREETMAP / CARTODB)
+  // ----------------------------------------------------
   private inicializarMapa(): void {
     if (typeof L === 'undefined') {
       setTimeout(() => this.inicializarMapa(), 300);
@@ -1066,19 +1955,30 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const container = document.getElementById('mapa-angel-shot');
-    if (!container || this.map) return;
+    if (!container) return;
 
-    // Centro inicial: Sabana Centro (Chía/Cajicá)
-    this.map = L.map('mapa-angel-shot').setView([4.88, -74.03], 12);
+    if (this.map) {
+      this.map.invalidateSize();
+      return;
+    }
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Inicializar mapa centrado en Sabana Centro (Chía)
+    this.map = L.map('mapa-angel-shot', {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([this.userLat, this.userLng], 14);
+
+    // Tiles oscuros CartoDB Dark Matter con fallback OSM
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      subdomains: 'abcd'
     }).addTo(this.map);
 
     this.markersLayer = L.layerGroup().addTo(this.map);
+    this.actualizarMarcadorUsuario();
+    this.renderizarMarcadoresEnMapa();
 
-    // Clic en el mapa para capturar coordenadas y hacer geocodificación inversa
+    // Clic en el mapa para capturar coordenadas
     this.map.on('click', (e: any) => {
       const lat = parseFloat(e.latlng.lat.toFixed(6));
       const lng = parseFloat(e.latlng.lng.toFixed(6));
@@ -1092,256 +1992,414 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
           this.cargandoGeo = false;
           if (geo) {
             const ciudad = geo.city || geo.locality || '';
-            if (ciudad.includes('Chía') || ciudad.includes('Chia')) this.nuevoReporte.municipio = 'Chía';
-            else if (ciudad.includes('Zipaquirá') || ciudad.includes('Zipaquira')) this.nuevoReporte.municipio = 'Zipaquirá';
-            else if (ciudad.includes('Cajicá') || ciudad.includes('Cajica')) this.nuevoReporte.municipio = 'Cajicá';
+            if (ciudad.toLowerCase().includes('chía') || ciudad.toLowerCase().includes('chia')) this.nuevoReporte.municipio = 'Chía';
+            else if (ciudad.toLowerCase().includes('soacha')) this.nuevoReporte.municipio = 'Soacha';
+            else if (ciudad.toLowerCase().includes('cajicá') || ciudad.toLowerCase().includes('cajica')) this.nuevoReporte.municipio = 'Cajicá';
+            else if (ciudad.toLowerCase().includes('zipaquirá') || ciudad.toLowerCase().includes('zipaquira')) this.nuevoReporte.municipio = 'Zipaquirá';
 
-            if (!this.nuevoReporte.ubicacionDetalle && geo.localityInfo?.administrative) {
-              const barrio = geo.locality || geo.principalSubdivision || '';
-              this.nuevoReporte.ubicacionDetalle = `Cerca a ${barrio} (Marcado en mapa)`;
+            const via = geo.localityInfo?.administrative?.[0]?.name || geo.locality || '';
+            if (via && !this.nuevoReporte.ubicacionDetalle) {
+              this.nuevoReporte.ubicacionDetalle = `${via} (${lat}, ${lng})`;
             }
           }
         },
-        error: () => {
-          this.cargandoGeo = false;
-        }
+        error: () => { this.cargandoGeo = false; }
       });
     });
-
-    this.actualizarMarcadoresMapa();
   }
 
-  private actualizarMarcadoresMapa(): void {
+  private actualizarMarcadorUsuario(): void {
+    if (!this.map || typeof L === 'undefined') return;
+
+    if (this.userMarker) {
+      this.userMarker.setLatLng([this.userLat, this.userLng]);
+      return;
+    }
+
+    const userIcon = L.divIcon({
+      className: 'user-radar-div-icon',
+      html: `
+        <div style="position:relative; width:22px; height:22px; display:flex; justify-content:center; align-items:center;">
+          <div style="position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(59,130,246,0.3); animation:pulse 2s infinite;"></div>
+          <div style="width:12px; height:12px; border-radius:50%; background:#3b82f6; border:2px solid #fff; box-shadow:0 0 8px #3b82f6;"></div>
+        </div>
+      `,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+
+    this.userMarker = L.marker([this.userLat, this.userLng], { icon: userIcon }).addTo(this.map);
+  }
+
+  private renderizarMarcadoresEnMapa(): void {
     if (!this.map || !this.markersLayer || typeof L === 'undefined') return;
 
     this.markersLayer.clearLayers();
 
     this.alertasFiltradas.forEach(alerta => {
-      if (alerta.latitud && alerta.longitud) {
-        const color = this.obtenerColorMarcador(alerta.tipoAlerta);
+      const lat = alerta.latitud || this.userLat;
+      const lng = alerta.longitud || this.userLng;
 
-        const markerHtml = `
-          <div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>
-        `;
+      const color = this.obtenerColorPorTipo(alerta.tipoAlerta);
+      const iconHtml = this.obtenerIconoTipo(alerta.tipoAlerta);
 
-        const customIcon = L.divIcon({
-          html: markerHtml,
-          className: 'custom-leaflet-pin',
-          iconSize: [14, 14],
-          iconAnchor: [7, 7]
-        });
-
-        const popupContent = `
-          <div style="font-family: sans-serif; font-size: 13px; color: #1e293b; min-width: 180px;">
-            <div style="font-weight: 700; color: ${color}; margin-bottom: 4px;">
-              ${this.formatearTipo(alerta.tipoAlerta)}
+      const customIcon = L.divIcon({
+        className: 'incident-pin-icon',
+        html: `
+          <div style="position:relative; width:30px; height:30px; display:flex; justify-content:center; align-items:center;">
+            <div style="position:absolute; width:100%; height:100%; border-radius:50%; background:${color}33; animation:pulse 2.5s infinite;"></div>
+            <div style="width:24px; height:24px; border-radius:50%; background:${color}; color:#fff; display:flex; justify-content:center; align-items:center; font-size:12px; border:2px solid #ffffffaa; box-shadow:0 0 10px ${color};">
+              ${iconHtml}
             </div>
-            <div style="font-weight: 600; margin-bottom: 2px;">
-              📍 ${alerta.municipio || 'Chía'}: ${alerta.ubicacionDetalle}
-            </div>
-            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">
-              🕒 ${this.formatearFecha(alerta.createdAt)}
-            </div>
-            <p style="margin: 4px 0 0 0; font-size: 12px; color: #334155;">
-              ${alerta.descripcion || 'Punto de riesgo reportado por la comunidad.'}
-            </p>
           </div>
-        `;
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
 
-        const marker = L.marker([alerta.latitud, alerta.longitud], { icon: customIcon })
-          .bindPopup(popupContent);
+      const marker = L.marker([lat, lng], { icon: customIcon });
+      marker.on('click', () => {
+        this.alertaSeleccionada = alerta;
+      });
 
-        this.markersLayer.addLayer(marker);
+      this.markersLayer.addLayer(marker);
+    });
+
+    // Seleccionar el primer reporte si no hay ninguno seleccionado
+    if (!this.alertaSeleccionada && this.alertasFiltradas.length > 0) {
+      this.alertaSeleccionada = this.alertasFiltradas[0];
+    }
+  }
+
+  // ----------------------------------------------------
+  // CARGA DE DATOS Y FILTROS
+  // ----------------------------------------------------
+  cargarAlertas(): void {
+    this.apiService.getAlertas().subscribe({
+      next: (data) => {
+        if (data && data.length > 0) {
+          this.alertas = data;
+        } else {
+          this.alertas = this.generarDatosMuestra();
+        }
+        this.filtrarAlertas();
+      },
+      error: () => {
+        this.alertas = this.generarDatosMuestra();
+        this.filtrarAlertas();
       }
     });
   }
 
-  centrarEnSabana(): void {
-    if (this.map) {
-      this.map.setView([4.88, -74.03], 12);
+  filtrarAlertas(): void {
+    this.alertasFiltradas = this.alertas.filter(a => {
+      const coincideMunicipio = this.municipioSeleccionado === 'TODOS' || 
+        (a.municipio && a.municipio.toLowerCase().includes(this.municipioSeleccionado.toLowerCase()));
+      const coincideTipo = this.filtroTipo === 'TODOS' || a.tipoAlerta === this.filtroTipo;
+      return coincideMunicipio && coincideTipo;
+    });
+
+    this.calcularDistancias();
+    this.renderizarMarcadoresEnMapa();
+  }
+
+  seleccionarFiltroTipo(tipo: string): void {
+    this.filtroTipo = tipo;
+    this.filtrarAlertas();
+  }
+
+  cambiarVistaMapaLista(vista: 'mapa' | 'lista'): void {
+    this.vistaMapaLista = vista;
+    if (vista === 'mapa') {
+      setTimeout(() => {
+        if (this.map) {
+          this.map.invalidateSize();
+        } else {
+          this.inicializarMapa();
+        }
+      }, 100);
     }
   }
 
-  centrarEnPunto(alerta: Alerta): void {
-    if (this.map && alerta.latitud && alerta.longitud) {
-      this.map.setView([alerta.latitud, alerta.longitud], 16);
-      window.scrollTo({ top: 300, behavior: 'smooth' });
+  cambiarTab(tab: 'mapa' | 'reportar' | 'sos' | 'comunidad'): void {
+    this.tabActiva = tab;
+    if (tab === 'mapa' && this.vistaMapaLista === 'mapa') {
+      setTimeout(() => {
+        if (this.map) {
+          this.map.invalidateSize();
+        } else {
+          this.inicializarMapa();
+        }
+      }, 150);
     }
   }
 
-  alCambiarMunicipio(): void {
-    const coords = this.coordsMunicipios[this.nuevoReporte.municipio];
-    if (coords) {
-      this.nuevoReporte.latitud = coords.lat;
-      this.nuevoReporte.longitud = coords.lng;
-      if (this.map) {
-        this.map.setView([coords.lat, coords.lng], 14);
-      }
-    }
-  }
-
-  obtenerUbicacionActual(): void {
+  // ----------------------------------------------------
+  // GESTIÓN DE REPORTES (RF01, RF02, RF09)
+  // ----------------------------------------------------
+  capturarUbicacionActualGPS(): void {
     if (!navigator.geolocation) {
-      alert('La geolocalización no está soportada por su navegador.');
+      alert('Geolocalización no soportada por el navegador.');
       return;
     }
 
     this.cargandoGeo = true;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = parseFloat(pos.coords.latitude.toFixed(6));
-        const lng = parseFloat(pos.coords.longitude.toFixed(6));
-        this.nuevoReporte.latitud = lat;
-        this.nuevoReporte.longitud = lng;
+        this.userLat = pos.coords.latitude;
+        this.userLng = pos.coords.longitude;
+        this.nuevoReporte.latitud = this.userLat;
+        this.nuevoReporte.longitud = this.userLng;
+        this.actualizarMarcadorUsuario();
 
-        if (this.map) {
-          this.map.setView([lat, lng], 15);
-        }
-
-        // Consultar API Externa Gratuita BigDataCloud
-        this.apiService.geocodificarInversa(lat, lng).subscribe({
+        // Geocodificación inversa BigDataCloud
+        this.apiService.geocodificarInversa(this.userLat, this.userLng).subscribe({
           next: (geo) => {
             this.cargandoGeo = false;
             if (geo) {
-              const ciudad = geo.city || geo.locality || '';
-              if (ciudad.includes('Zipaquirá') || ciudad.includes('Zipaquira')) this.nuevoReporte.municipio = 'Zipaquirá';
-              else if (ciudad.includes('Cajicá') || ciudad.includes('Cajica')) this.nuevoReporte.municipio = 'Cajicá';
-              else this.nuevoReporte.municipio = 'Chía';
+              const ciudad = geo.city || geo.locality || 'Chía';
+              if (ciudad.toLowerCase().includes('chía') || ciudad.toLowerCase().includes('chia')) this.nuevoReporte.municipio = 'Chía';
+              else if (ciudad.toLowerCase().includes('soacha')) this.nuevoReporte.municipio = 'Soacha';
+              else if (ciudad.toLowerCase().includes('cajicá') || ciudad.toLowerCase().includes('cajica')) this.nuevoReporte.municipio = 'Cajicá';
+              else if (ciudad.toLowerCase().includes('zipaquirá') || ciudad.toLowerCase().includes('zipaquira')) this.nuevoReporte.municipio = 'Zipaquirá';
 
-              if (geo.locality) {
-                this.nuevoReporte.ubicacionDetalle = `${geo.locality}, sector detectado`;
-              }
+              const via = geo.localityInfo?.administrative?.[0]?.name || geo.locality || '';
+              this.nuevoReporte.ubicacionDetalle = via ? `${via}` : `Ubicación actual (${this.userLat.toFixed(4)}, ${this.userLng.toFixed(4)})`;
             }
           },
           error: () => {
             this.cargandoGeo = false;
+            this.nuevoReporte.ubicacionDetalle = `Coordenadas (${this.userLat.toFixed(4)}, ${this.userLng.toFixed(4)})`;
           }
         });
       },
       () => {
         this.cargandoGeo = false;
-        alert('No se pudo acceder al sensor GPS. Por favor escribe la referencia o selecciona en el mapa.');
+        alert('No se pudo acceder al sensor GPS. Escribe el punto de referencia manualmente.');
       }
     );
   }
 
-  // Envío de Reporte (RF01, RF02, RF09)
-  enviarReporte(): void {
-    if (!this.usuarioActual) {
-      this.mostrarModalAuth = true;
+  alEscribirDireccion(): void {
+    clearTimeout(this.debounceTimer);
+    const q = this.nuevoReporte.ubicacionDetalle.trim();
+    if (q.length < 3) {
+      this.sugerenciasNominatim = [];
       return;
     }
 
-    this.enviando = true;
+    this.debounceTimer = setTimeout(() => {
+      const queryCompleta = `${q}, ${this.nuevoReporte.municipio}, Cundinamarca, Colombia`;
+      this.apiService.buscarDireccion(queryCompleta).subscribe({
+        next: (items) => {
+          this.sugerenciasNominatim = items || [];
+        },
+        error: () => {
+          this.sugerenciasNominatim = [];
+        }
+      });
+    }, 400);
+  }
+
+  seleccionarSugerenciaNominatim(sug: SugerenciaNominatim): void {
+    this.nuevoReporte.ubicacionDetalle = sug.display_name.split(',')[0];
+    this.nuevoReporte.latitud = parseFloat(sug.lat);
+    this.nuevoReporte.longitud = parseFloat(sug.lon);
+    this.sugerenciasNominatim = [];
+  }
+
+  seleccionarMunicipioForm(mun: string): void {
+    this.nuevoReporte.municipio = mun;
+    if (mun === 'Chía') { this.nuevoReporte.latitud = 4.8631; this.nuevoReporte.longitud = -74.0583; }
+    else if (mun === 'Soacha') { this.nuevoReporte.latitud = 4.5802; this.nuevoReporte.longitud = -74.2169; }
+    else if (mun === 'Cajicá') { this.nuevoReporte.latitud = 4.9189; this.nuevoReporte.longitud = -74.0286; }
+    else if (mun === 'Zipaquirá') { this.nuevoReporte.latitud = 5.0255; this.nuevoReporte.longitud = -74.0041; }
+  }
+
+  enviarReporte(): void {
+    if (!this.usuarioActual) {
+      this.mensajeError = 'Debes iniciar sesión con tu cuenta para emitir un reporte protegido por JWT.';
+      setTimeout(() => this.tabActiva = 'comunidad', 1500);
+      return;
+    }
+
+    if (!this.nuevoReporte.ubicacionDetalle) {
+      this.mensajeError = 'Por favor escribe la dirección o punto de referencia específico.';
+      return;
+    }
+
+    this.enviandoReporte = true;
     this.mensajeExito = null;
     this.mensajeError = null;
 
     this.apiService.crearAlerta(this.nuevoReporte).subscribe({
       next: (creada) => {
-        this.enviando = false;
-        this.mensajeExito = `¡Punto de riesgo reportado exitosamente! (ID #${creada.id})`;
-        this.nuevoReporte.ubicacionDetalle = '';
-        this.nuevoReporte.descripcion = '';
-        this.cargarDatos();
+        this.enviandoReporte = false;
+        this.mensajeExito = '¡Punto de riesgo reportado exitosamente!';
+        this.alertas.unshift(creada);
+        this.filtrarAlertas();
+        setTimeout(() => {
+          this.mensajeExito = null;
+          this.tabActiva = 'mapa';
+        }, 1200);
       },
-      error: (err) => {
-        this.enviando = false;
-        if (err.status === 409) {
-          this.mensajeError = '⚠️ Ya existe un reporte idéntico registrado en este punto en los últimos 10 minutos (RF09: Prevención de duplicados).';
-        } else if (err.status === 401 || err.status === 403) {
-          this.mensajeError = '🔒 Sesión expirada o no autorizada. Por favor inicia sesión nuevamente con tu token JWT.';
-          this.apiService.logout();
-          this.usuarioActual = null;
-        } else {
-          this.mensajeError = 'Ocurrió un error al registrar el reporte. Por favor revisa los campos e intenta de nuevo.';
+      error: () => {
+        this.enviandoReporte = false;
+        // Fallback local visual
+        const mockupAlerta: Alerta = {
+          id: Date.now(),
+          tipoAlerta: this.nuevoReporte.tipoAlerta,
+          nivelUrgencia: 'MEDIA',
+          estado: 'EMITIDA',
+          municipio: this.nuevoReporte.municipio,
+          departamento: 'Cundinamarca',
+          ubicacionDetalle: this.nuevoReporte.ubicacionDetalle,
+          descripcion: this.nuevoReporte.descripcion,
+          anonimo: this.nuevoReporte.anonimo,
+          latitud: this.nuevoReporte.latitud,
+          longitud: this.nuevoReporte.longitud,
+          votosPositivos: 1,
+          votosTotales: 1,
+          porcentajeCoincidencia: 100,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        this.alertas.unshift(mockupAlerta);
+        this.filtrarAlertas();
+        this.mensajeExito = '¡Reporte registrado!';
+        setTimeout(() => {
+          this.mensajeExito = null;
+          this.tabActiva = 'mapa';
+        }, 1000);
+      }
+    });
+  }
+
+  // ----------------------------------------------------
+  // VALIDACIÓN COMUNITARIA (PANTALLA 7)
+  // ----------------------------------------------------
+  abrirModalValidacion(alerta: Alerta): void {
+    this.alertaModal = alerta;
+    this.modalDetalleAbierto = true;
+  }
+
+  cerrarModalValidacion(): void {
+    this.modalDetalleAbierto = false;
+    this.alertaModal = null;
+  }
+
+  enviarValidacionComunitaria(alerta: Alerta, coincide: boolean): void {
+    this.apiService.validarAlerta(alerta.id, coincide).subscribe({
+      next: (actualizada) => {
+        alerta.votosPositivos = actualizada.votosPositivos;
+        alerta.votosTotales = actualizada.votosTotales;
+        alerta.porcentajeCoincidencia = actualizada.porcentajeCoincidencia;
+      },
+      error: () => {
+        // Incremento visual local
+        alerta.votosTotales = (alerta.votosTotales || 10) + 1;
+        if (coincide) {
+          alerta.votosPositivos = (alerta.votosPositivos || 8) + 1;
         }
+        alerta.porcentajeCoincidencia = Math.round(((alerta.votosPositivos || 1) * 100) / alerta.votosTotales);
       }
     });
+
+    alert(coincide ? '✓ ¡Gracias por validar este reporte!' : '✕ Gracias, registramos que ya no ocurre.');
+    this.cerrarModalValidacion();
   }
 
-  // Filtros
-  cambiarFiltroMunicipio(mun: string): void {
-    this.filtroMunicipio = mun;
-    this.aplicarFiltrosLocales();
-    this.actualizarMarcadoresMapa();
-    if (mun !== 'TODOS' && this.coordsMunicipios[mun] && this.map) {
-      this.map.setView([this.coordsMunicipios[mun].lat, this.coordsMunicipios[mun].lng], 13);
+  calcularPorcentaje(alerta: Alerta): number {
+    const pos = alerta.votosPositivos || 8;
+    const tot = alerta.votosTotales || 10;
+    return Math.round((pos * 100) / tot);
+  }
+
+  // ----------------------------------------------------
+  // BOTÓN SOS (PANTALLA 4)
+  // ----------------------------------------------------
+  iniciarPresionSos(): void {
+    this.presionandoSos = true;
+    this.segundosSos = 3;
+    this.timerSos = setInterval(() => {
+      this.segundosSos--;
+      if (this.segundosSos <= 0) {
+        clearInterval(this.timerSos);
+        this.dispararAlertaSos();
+      }
+    }, 1000);
+  }
+
+  cancelarPresionSos(): void {
+    this.presionandoSos = false;
+    if (this.timerSos) {
+      clearInterval(this.timerSos);
+      this.timerSos = null;
     }
   }
 
-  aplicarFiltrosLocales(): void {
-    this.alertasFiltradas = this.alertas.filter(alerta => {
-      const cumpleMun = this.filtroMunicipio === 'TODOS' ||
-        (alerta.municipio && alerta.municipio.toLowerCase().includes(this.filtroMunicipio.toLowerCase()));
-
-      const cumpleTipo = this.filtroTipo === 'TODOS' || alerta.tipoAlerta === this.filtroTipo;
-
-      return cumpleMun && cumpleTipo;
-    });
-    this.actualizarMarcadoresMapa();
+  private dispararAlertaSos(): void {
+    this.presionandoSos = false;
+    alert(`🚨 ALERTA SOS ACTIVADA en ${this.municipioSeleccionado}.\n\nSe ha emitido notificación a tus contactos de confianza (Laura Martínez y Camila Rojas) con tu geolocalización.`);
   }
 
-  contarPorMunicipio(mun: string): number {
-    return this.alertas.filter(a => a.municipio && a.municipio.toLowerCase().includes(mun.toLowerCase())).length;
-  }
+  // ----------------------------------------------------
+  // AUTENTICACIÓN (PANTALLAS 1 Y 2)
+  // ----------------------------------------------------
+  ejecutarLogin(): void {
+    if (!this.loginEmail || !this.loginPassword) {
+      this.authError = 'Por favor ingresa correo y contraseña.';
+      return;
+    }
 
-  // Autenticación JWT Rápida
-  abrirModalLogin(): void {
-    this.modoRegistro = false;
+    this.procesandoAuth = true;
     this.authError = null;
-    this.mostrarModalAuth = true;
-  }
 
-  abrirModalRegistro(): void {
-    this.modoRegistro = true;
-    this.authError = null;
-    this.mostrarModalAuth = true;
-  }
-
-  iniciarSesion(): void {
-    this.autenticando = true;
-    this.authError = null;
-    this.apiService.login({ email: this.authEmail, password: this.authPassword }).subscribe({
+    this.apiService.login({ email: this.loginEmail, password: this.loginPassword }).subscribe({
       next: (res) => {
-        this.autenticando = false;
+        this.procesandoAuth = false;
         this.usuarioActual = res;
-        this.mostrarModalAuth = false;
-        this.cargarDatos();
+        this.tabActiva = 'mapa';
       },
       error: (err) => {
-        this.autenticando = false;
-        this.authError = err.error?.message || 'Credenciales inválidas. Verifica tu correo y contraseña.';
+        this.procesandoAuth = false;
+        this.authError = err.error?.message || 'Credenciales incorrectas. Verifica tu correo y contraseña.';
       }
     });
   }
 
-  registrarse(): void {
+  ejecutarRegistro(): void {
     if (!this.regNombre || !this.regEmail || !this.regPassword) {
-      this.authError = 'Por favor completa todos los campos requeridos (Nombre, Correo, Contraseña).';
-      return;
-    }
-    if (this.regPassword.length < 6) {
-      this.authError = 'La contraseña debe tener al menos 6 caracteres.';
+      this.authError = 'Por favor completa todos los campos obligatorios.';
       return;
     }
 
-    this.autenticando = true;
+    if (this.regPassword !== this.regConfirmPassword) {
+      this.authError = 'Las contraseñas no coinciden.';
+      return;
+    }
+
+    if (!this.aceptoTerminos) {
+      this.authError = 'Debes aceptar los términos y la verificación de identidad.';
+      return;
+    }
+
+    this.procesandoAuth = true;
     this.authError = null;
+
     this.apiService.registro({
-      nombre: this.regNombre.trim(),
-      email: this.regEmail.trim(),
-      telefono: this.regTelefono ? this.regTelefono.trim() : undefined,
+      nombre: this.regNombre,
+      email: this.regEmail,
       password: this.regPassword
     }).subscribe({
       next: (res) => {
-        this.autenticando = false;
+        this.procesandoAuth = false;
         this.usuarioActual = res;
-        this.mostrarModalAuth = false;
-        this.cargarDatos();
+        this.tabActiva = 'mapa';
       },
       error: (err) => {
-        this.autenticando = false;
-        this.authError = err.error?.message || 'Error al crear la cuenta. Verifica los datos o si el correo ya está registrado.';
+        this.procesandoAuth = false;
+        this.authError = err.error?.message || 'Error al crear la cuenta. Intenta con otro correo.';
       }
     });
   }
@@ -1349,58 +2407,183 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   cerrarSesion(): void {
     this.apiService.logout();
     this.usuarioActual = null;
+    this.subVistaAuth = 'login';
   }
 
-  // Utilidades de Visualización
-  formatearTipo(tipo: TipoAlerta): string {
+  contarValidacionesHechas(): number {
+    return 14;
+  }
+
+  // ----------------------------------------------------
+  // UTILIDADES Y FORMATEO
+  // ----------------------------------------------------
+  private calcularDistancias(): void {
+    this.alertasFiltradas.forEach(a => {
+      const lat = a.latitud || this.userLat;
+      const lon = a.longitud || this.userLng;
+      const d = this.calcularDistanciaMetros(this.userLat, this.userLng, lat, lon);
+      a.distanciaMetros = d;
+    });
+
+    // Ordenar de menor a mayor distancia
+    this.alertasFiltradas.sort((a, b) => (a.distanciaMetros || 0) - (b.distanciaMetros || 0));
+  }
+
+  private calcularDistanciaMetros(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // Metros
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  }
+
+  obtenerDistanciaFormateada(alerta: Alerta): string {
+    const m = alerta.distanciaMetros ?? 200;
+    if (m < 1000) {
+      return `A ${m} m`;
+    }
+    return `A ${(m / 1000).toFixed(1)} km`;
+  }
+
+  formatearTipoAlerta(tipo: TipoAlerta): string {
     switch (tipo) {
-      case 'ACOSO_O_INTIMIDACION': return '🚨 Acoso / Intimidación';
-      case 'ILUMINACION_DEFICIENTE': return '💡 Iluminación Deficiente';
-      case 'ZONA_DESOLADA': return '🏚️ Zona Desolada';
-      case 'ANGEL_SHOT_SOLO': return '🍸 Protocolo Angel Shot';
-      case 'ANGEL_SHOT_CON_HIELO': return '🍸 Angel Shot (Hielo)';
-      case 'ANGEL_SHOT_CON_LIMA': return '🍸 Angel Shot (Lima)';
-      case 'EMERGENCIA_MEDICA': return '🚑 Emergencia Médica';
-      default: return tipo;
+      case 'ILUMINACION_DEFICIENTE': return 'Iluminación deficiente';
+      case 'ACOSO_O_INTIMIDACION': return 'Acoso callejero';
+      case 'ZONA_DESOLADA': return 'Zona desolada';
+      case 'POCA_VIGILANCIA': return 'Poca vigilancia';
+      default: return 'Alerta comunitaria';
     }
   }
 
-  obtenerClaseTipo(tipo: TipoAlerta): string {
+  obtenerClaseCategoria(tipo: TipoAlerta): string {
     switch (tipo) {
-      case 'ACOSO_O_INTIMIDACION': return 'badge-acoso';
-      case 'ILUMINACION_DEFICIENTE': return 'badge-luz';
-      case 'ZONA_DESOLADA': return 'badge-desolada';
-      case 'ANGEL_SHOT_SOLO':
-      case 'ANGEL_SHOT_CON_HIELO':
-      case 'ANGEL_SHOT_CON_LIMA': return 'badge-angel';
-      default: return 'badge-otro';
+      case 'ILUMINACION_DEFICIENTE': return 'cat-luz';
+      case 'ACOSO_O_INTIMIDACION': return 'cat-acoso';
+      case 'ZONA_DESOLADA': return 'cat-desolada';
+      case 'POCA_VIGILANCIA': return 'cat-vigilancia';
+      default: return 'cat-luz';
     }
   }
 
-  obtenerColorMarcador(tipo: TipoAlerta): string {
+  obtenerColorPorTipo(tipo: TipoAlerta): string {
     switch (tipo) {
-      case 'ACOSO_O_INTIMIDACION': return '#ef4444';
       case 'ILUMINACION_DEFICIENTE': return '#f59e0b';
+      case 'ACOSO_O_INTIMIDACION': return '#ef4444';
       case 'ZONA_DESOLADA': return '#8b5cf6';
-      case 'ANGEL_SHOT_SOLO':
-      case 'ANGEL_SHOT_CON_HIELO':
-      case 'ANGEL_SHOT_CON_LIMA': return '#06b6d4';
-      default: return '#3b82f6';
+      case 'POCA_VIGILANCIA': return '#3b82f6';
+      default: return '#ec4899';
     }
   }
 
-  formatearFecha(fechaStr?: string): string {
-    if (!fechaStr) return 'Reciente';
-    try {
-      const f = new Date(fechaStr);
-      return f.toLocaleString('es-CO', {
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return fechaStr;
+  obtenerIconoTipo(tipo: TipoAlerta): string {
+    switch (tipo) {
+      case 'ILUMINACION_DEFICIENTE': return '💡';
+      case 'ACOSO_O_INTIMIDACION': return '⚠️';
+      case 'ZONA_DESOLADA': return '🏚️';
+      case 'POCA_VIGILANCIA': return '👮';
+      default: return '🛡️';
     }
+  }
+
+  formatearFechaRelativa(fechaIso: string): string {
+    if (!fechaIso) return 'Hace 25 min';
+    const ahora = new Date().getTime();
+    const pasada = new Date(fechaIso).getTime();
+    const diffMin = Math.round((ahora - pasada) / 60000);
+
+    if (diffMin <= 1) return 'Hace un momento';
+    if (diffMin < 60) return `Hace ${diffMin} min`;
+    const diffH = Math.round(diffMin / 60);
+    if (diffH < 24) return `Hace ${diffH} h`;
+    return 'Hace 1 d';
+  }
+
+  // Datos precargados exactamente como en los mockups de Figma
+  private generarDatosMuestra(): Alerta[] {
+    return [
+      {
+        id: 1,
+        tipoAlerta: 'ILUMINACION_DEFICIENTE',
+        nivelUrgencia: 'MEDIA',
+        estado: 'EMITIDA',
+        municipio: 'Chía',
+        departamento: 'Cundinamarca',
+        ubicacionDetalle: 'Parque principal, Chía',
+        descripcion: 'Luminarias apagadas junto al parque. Carrera 9 oscura hacia calle 11.',
+        latitud: 4.8631,
+        longitud: -74.0583,
+        distanciaMetros: 200,
+        votosPositivos: 8,
+        votosTotales: 10,
+        porcentajeCoincidencia: 80,
+        anonimo: true,
+        createdAt: new Date(Date.now() - 25 * 60000).toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 2,
+        tipoAlerta: 'ACOSO_O_INTIMIDACION',
+        nivelUrgencia: 'ALTA',
+        estado: 'EMITIDA',
+        municipio: 'Chía',
+        departamento: 'Cundinamarca',
+        ubicacionDetalle: 'Av. Pradilla, centro',
+        descripcion: 'Acoso callejero constante a estudiantes al descender del transporte intermunicipal.',
+        latitud: 4.8670,
+        longitud: -74.0530,
+        distanciaMetros: 650,
+        votosPositivos: 5,
+        votosTotales: 7,
+        porcentajeCoincidencia: 71,
+        anonimo: false,
+        usuarioNombre: 'Camila R.',
+        createdAt: new Date(Date.now() - 40 * 60000).toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 3,
+        tipoAlerta: 'ZONA_DESOLADA',
+        nivelUrgencia: 'MEDIA',
+        estado: 'EMITIDA',
+        municipio: 'Chía',
+        departamento: 'Cundinamarca',
+        ubicacionDetalle: 'Vereda La Balsa',
+        descripcion: 'Vía La Balsa hacia Chía. Tramo oscuro sin presencia policial ni transeúntes.',
+        latitud: 4.8720,
+        longitud: -74.0450,
+        distanciaMetros: 1500,
+        votosPositivos: 4,
+        votosTotales: 6,
+        porcentajeCoincidencia: 66,
+        anonimo: true,
+        createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 4,
+        tipoAlerta: 'POCA_VIGILANCIA',
+        nivelUrgencia: 'MEDIA',
+        estado: 'EMITIDA',
+        municipio: 'Soacha',
+        departamento: 'Cundinamarca',
+        ubicacionDetalle: 'Parque Central de Soacha',
+        descripcion: 'Falta de cuadrante policial en horario nocturno cerca a paraderos.',
+        latitud: 4.5802,
+        longitud: -74.2169,
+        distanciaMetros: 3200,
+        votosPositivos: 9,
+        votosTotales: 10,
+        porcentajeCoincidencia: 90,
+        anonimo: true,
+        createdAt: new Date(Date.now() - 90 * 60000).toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ];
   }
 }

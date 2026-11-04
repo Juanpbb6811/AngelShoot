@@ -69,6 +69,9 @@ public class AlertaService {
         alerta.setDescripcion(request.getDescripcion());
         alerta.setCodigoSeguridad(request.getCodigoSeguridad());
         alerta.setActivo(true);
+        if (request.getAnonimo() != null) {
+            alerta.setAnonimo(request.getAnonimo());
+        }
 
         // Asignar urgencia según tipo si no viene especificada
         if (request.getNivelUrgencia() != null) {
@@ -206,31 +209,24 @@ public class AlertaService {
         return mapToDTO(alerta);
     }
 
+    @Transactional
+    public AlertaDTO validarAlerta(Long id, boolean coincide) {
+        Alerta alerta = alertaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Alerta no encontrada con ID: " + id));
+
+        int totales = (alerta.getVotosTotales() != null ? alerta.getVotosTotales() : 0) + 1;
+        alerta.setVotosTotales(totales);
+
+        if (coincide) {
+            int positivos = (alerta.getVotosPositivos() != null ? alerta.getVotosPositivos() : 0) + 1;
+            alerta.setVotosPositivos(positivos);
+        }
+
+        Alerta guardada = alertaRepository.save(alerta);
+        return mapToDTO(guardada);
+    }
+
     private AlertaDTO mapToDTO(Alerta a) {
-        AlertaDTO dto = new AlertaDTO();
-        dto.setId(a.getId());
-        if (a.getUsuario() != null) {
-            dto.setUsuarioId(a.getUsuario().getId());
-            dto.setUsuarioNombre(a.getUsuario().getNombre());
-            dto.setUsuarioTelefono(a.getUsuario().getTelefono());
-        }
-        if (a.getEstablecimiento() != null) {
-            dto.setEstablecimientoId(a.getEstablecimiento().getId());
-            dto.setEstablecimientoNombre(a.getEstablecimiento().getNombre());
-        }
-        dto.setTipoAlerta(a.getTipoAlerta());
-        dto.setNivelUrgencia(a.getNivelUrgencia());
-        dto.setEstado(a.getEstado());
-        dto.setLatitud(a.getLatitud());
-        dto.setLongitud(a.getLongitud());
-        dto.setMunicipio(a.getMunicipio());
-        dto.setDepartamento(a.getDepartamento());
-        dto.setUbicacionDetalle(a.getUbicacionDetalle());
-        dto.setDescripcion(a.getDescripcion());
-        dto.setCodigoSeguridad(a.getCodigoSeguridad());
-        dto.setActivo(a.getActivo());
-        dto.setCreatedAt(a.getCreatedAt());
-        dto.setUpdatedAt(a.getUpdatedAt());
-        return dto;
+        return new AlertaDTO(a);
     }
 }

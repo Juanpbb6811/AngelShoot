@@ -21,6 +21,7 @@ public class CrearAlertaRequest {
     private String ubicacionDetalle; // Punto de referencia específico
     private String descripcion;
     private String codigoSeguridad;
+    private Boolean anonimo;
 
     public CrearAlertaRequest() {
     }
@@ -103,5 +104,13 @@ public class CrearAlertaRequest {
 
     public void setCodigoSeguridad(String codigoSeguridad) {
         this.codigoSeguridad = codigoSeguridad;
+    }
+
+    public Boolean getAnonimo() {
+        return anonimo;
+    }
+
+    public void setAnonimo(Boolean anonimo) {
+        this.anonimo = anonimo;
     }
 }

@@ -1,5 +1,6 @@
 package com.angelshot.dto;
 
+import com.angelshot.entity.Alerta;
 import com.angelshot.entity.EstadoAlerta;
 import com.angelshot.entity.NivelUrgencia;
 import com.angelshot.entity.TipoAlerta;
@@ -25,10 +26,47 @@ public class AlertaDTO {
     private String descripcion;
     private String codigoSeguridad;
     private Boolean activo;
+    private Integer votosPositivos;
+    private Integer votosTotales;
+    private Integer porcentajeCoincidencia;
+    private Boolean anonimo;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     public AlertaDTO() {
+    }
+
+    public AlertaDTO(Alerta alerta) {
+        if (alerta == null) return;
+        this.id = alerta.getId();
+        if (alerta.getUsuario() != null) {
+            this.usuarioId = alerta.getUsuario().getId();
+            this.usuarioNombre = alerta.getUsuario().getNombre();
+            this.usuarioTelefono = alerta.getUsuario().getTelefono();
+        }
+        if (alerta.getEstablecimiento() != null) {
+            this.establecimientoId = alerta.getEstablecimiento().getId();
+            this.establecimientoNombre = alerta.getEstablecimiento().getNombre();
+        }
+        this.tipoAlerta = alerta.getTipoAlerta();
+        this.nivelUrgencia = alerta.getNivelUrgencia();
+        this.estado = alerta.getEstado();
+        this.latitud = alerta.getLatitud();
+        this.longitud = alerta.getLongitud();
+        this.municipio = alerta.getMunicipio();
+        this.departamento = alerta.getDepartamento();
+        this.ubicacionDetalle = alerta.getUbicacionDetalle();
+        this.descripcion = alerta.getDescripcion();
+        this.codigoSeguridad = alerta.getCodigoSeguridad();
+        this.activo = alerta.getActivo();
+        this.votosPositivos = alerta.getVotosPositivos();
+        this.votosTotales = alerta.getVotosTotales();
+        this.anonimo = alerta.getAnonimo();
+        this.porcentajeCoincidencia = (alerta.getVotosTotales() != null && alerta.getVotosTotales() > 0)
+                ? (int) Math.round((alerta.getVotosPositivos() * 100.0) / alerta.getVotosTotales())
+                : 100;
+        this.createdAt = alerta.getCreatedAt();
+        this.updatedAt = alerta.getUpdatedAt();
     }
 
     public Long getId() {
@@ -181,5 +219,37 @@ public class AlertaDTO {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Integer getVotosPositivos() {
+        return votosPositivos;
+    }
+
+    public void setVotosPositivos(Integer votosPositivos) {
+        this.votosPositivos = votosPositivos;
+    }
+
+    public Integer getVotosTotales() {
+        return votosTotales;
+    }
+
+    public void setVotosTotales(Integer votosTotales) {
+        this.votosTotales = votosTotales;
+    }
+
+    public Integer getPorcentajeCoincidencia() {
+        return porcentajeCoincidencia;
+    }
+
+    public void setPorcentajeCoincidencia(Integer porcentajeCoincidencia) {
+        this.porcentajeCoincidencia = porcentajeCoincidencia;
+    }
+
+    public Boolean getAnonimo() {
+        return anonimo;
+    }
+
+    public void setAnonimo(Boolean anonimo) {
+        this.anonimo = anonimo;
     }
 }

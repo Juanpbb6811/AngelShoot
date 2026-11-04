@@ -16,12 +16,13 @@ export interface AuthResponse {
 }
 
 export type TipoAlerta = 
+  | 'ILUMINACION_DEFICIENTE'
+  | 'ACOSO_O_INTIMIDACION'
+  | 'ZONA_DESOLADA'
+  | 'POCA_VIGILANCIA'
   | 'ANGEL_SHOT_SOLO' 
   | 'ANGEL_SHOT_CON_HIELO' 
   | 'ANGEL_SHOT_CON_LIMA' 
-  | 'ACOSO_O_INTIMIDACION' 
-  | 'ILUMINACION_DEFICIENTE'
-  | 'ZONA_DESOLADA'
   | 'EMERGENCIA_MEDICA';
 
 export type EstadoAlerta = 
@@ -52,6 +53,11 @@ export interface Alerta {
   descripcion?: string;
   codigoSeguridad?: string;
   distanciaKm?: number;
+  distanciaMetros?: number;
+  votosPositivos?: number;
+  votosTotales?: number;
+  porcentajeCoincidencia?: number;
+  anonimo?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +71,7 @@ export interface CrearAlertaRequest {
   latitud?: number;
   longitud?: number;
   descripcion?: string;
+  anonimo?: boolean;
   establecimientoId?: number;
 }
 
