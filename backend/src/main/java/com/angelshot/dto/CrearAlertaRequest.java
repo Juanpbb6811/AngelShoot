@@ -16,7 +16,9 @@ public class CrearAlertaRequest {
     private Double latitud;
     private Double longitud;
 
-    private String ubicacionDetalle; // Ej: "Mesa 8", "Cerca a la salida de emergencia"
+    private String municipio; // Chía, Zipaquirá, Cajicá
+    private String departamento;
+    private String ubicacionDetalle; // Punto de referencia específico
     private String descripcion;
     private String codigoSeguridad;
 
@@ -61,6 +63,22 @@ public class CrearAlertaRequest {
 
     public void setLongitud(Double longitud) {
         this.longitud = longitud;
+    }
+
+    public String getMunicipio() {
+        return municipio;
+    }
+
+    public void setMunicipio(String municipio) {
+        this.municipio = municipio;
+    }
+
+    public String getDepartamento() {
+        return departamento;
+    }
+
+    public void setDepartamento(String departamento) {
+        this.departamento = departamento;
     }
 
     public String getUbicacionDetalle() {

@@ -4,6 +4,7 @@ import com.angelshot.dto.ActualizarEstadoRequest;
 import com.angelshot.dto.AlertaDTO;
 import com.angelshot.dto.CrearAlertaRequest;
 import com.angelshot.entity.EstadoAlerta;
+import com.angelshot.entity.TipoAlerta;
 import com.angelshot.service.AlertaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,7 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/alertas")
-@Tag(name = "Alertas Angel Shot", description = "Emisión, seguimiento y gestión de solicitudes de auxilio")
+@Tag(name = "Alertas y Puntos de Riesgo", description = "Emisión colaborativa, seguimiento y visualización en mapa de puntos de riesgo")
 public class AlertaController {
 
     private final AlertaService alertaService;
@@ -26,26 +27,39 @@ public class AlertaController {
         this.alertaService = alertaService;
     }
 
+    // RF01 & RF03: Emisión protegida mediante JWT
     @PostMapping
-    @Operation(summary = "Emitir una alerta de auxilio Angel Shot")
+    @Operation(summary = "Emitir una alerta de auxilio o registrar punto de riesgo")
     public ResponseEntity<AlertaDTO> emitirAlerta(Authentication auth, @Valid @RequestBody CrearAlertaRequest request) {
         return ResponseEntity.ok(alertaService.emitirAlerta(auth.getName(), request));
     }
 
     @GetMapping("/mis-alertas")
-    @Operation(summary = "Listar alertas emitidas por el usuario en sesión")
+    @Operation(summary = "Listar alertas emitidas por la usuaria en sesión")
     public ResponseEntity<List<AlertaDTO>> listarMisAlertas(Authentication auth) {
         return ResponseEntity.ok(alertaService.listarMisAlertas(auth.getName()));
     }
 
+    // RF04 & RF07: Consulta pública y filtros combinados por tipo y municipio (Chía, Zipaquirá, Cajicá)
     @GetMapping
-    @PreAuthorize("hasAnyRole('OPERADOR', 'GESTOR', 'ADMIN')")
-    @Operation(summary = "Listar todas las alertas (Personal de seguridad / Admin)")
-    public ResponseEntity<List<AlertaDTO>> listarTodas(@RequestParam(required = false) EstadoAlerta estado) {
-        if (estado != null) {
-            return ResponseEntity.ok(alertaService.listarPorEstado(estado));
-        }
-        return ResponseEntity.ok(alertaService.listarTodas());
+    @Operation(summary = "Consultar alertas y puntos de riesgo con filtros (Público)")
+    public ResponseEntity<List<AlertaDTO>> listarTodas(
+            @RequestParam(required = false) TipoAlerta tipo,
+            @RequestParam(required = false) EstadoAlerta estado,
+            @RequestParam(required = false) String municipio,
+            @RequestParam(required = false, defaultValue = "true") Boolean soloActivos
+    ) {
+        return ResponseEntity.ok(alertaService.filtrarAlertas(tipo, estado, municipio, soloActivos));
+    }
+
+    // RF05: Endpoint para mapa interactivo
+    @GetMapping("/mapa")
+    @Operation(summary = "Obtener puntos georreferenciados activos para el mapa Leaflet")
+    public ResponseEntity<List<AlertaDTO>> listarParaMapa(
+            @RequestParam(required = false) TipoAlerta tipo,
+            @RequestParam(required = false) String municipio
+    ) {
+        return ResponseEntity.ok(alertaService.filtrarAlertas(tipo, null, municipio, true));
     }
 
     @GetMapping("/{id}")
@@ -62,6 +76,18 @@ public class AlertaController {
             Authentication auth,
             @Valid @RequestBody ActualizarEstadoRequest request) {
         return ResponseEntity.ok(alertaService.actualizarEstado(id, auth.getName(), request));
+    }
+
+    // RF08: Moderación administrativa de alertas
+    @PatchMapping("/{id}/moderar")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Moderar o inactivar alerta (Solo Admin)")
+    public ResponseEntity<AlertaDTO> moderarAlerta(
+            @PathVariable Long id,
+            Authentication auth,
+            @RequestParam boolean activo,
+            @RequestParam(required = false) String motivo) {
+        return ResponseEntity.ok(alertaService.moderarAlerta(id, activo, motivo, auth.getName()));
     }
 
     @PostMapping("/{id}/asignar")

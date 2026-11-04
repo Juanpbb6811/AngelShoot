@@ -34,8 +34,17 @@ public class Alerta {
     private Double latitud;
     private Double longitud;
 
+    @Column(length = 100)
+    private String municipio; // Chía, Zipaquirá, Cajicá
+
+    @Column(length = 100)
+    private String departamento = "Cundinamarca";
+
+    @Column(nullable = false)
+    private Boolean activo = true;
+
     @Column(name = "ubicacion_detalle", length = 255)
-    private String ubicacionDetalle; // Ej: "Mesa 12", "Cerca al baño de mujeres"
+    private String ubicacionDetalle; // Ej: "Frente a la U. Cundinamarca", "Mesa 12"
 
     @Column(columnDefinition = "TEXT")
     private String descripcion;
@@ -54,6 +63,22 @@ public class Alerta {
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     public Alerta() {
+    }
+
+    public Alerta(Usuario usuario, TipoAlerta tipoAlerta, NivelUrgencia nivelUrgencia, String municipio, String ubicacionDetalle, Double latitud, Double longitud, String descripcion) {
+        this.usuario = usuario;
+        this.tipoAlerta = tipoAlerta;
+        this.nivelUrgencia = nivelUrgencia != null ? nivelUrgencia : NivelUrgencia.MEDIA;
+        this.municipio = municipio;
+        this.ubicacionDetalle = ubicacionDetalle;
+        this.latitud = latitud;
+        this.longitud = longitud;
+        this.descripcion = descripcion;
+        this.departamento = "Cundinamarca";
+        this.activo = true;
+        this.estado = EstadoAlerta.EMITIDA;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate
@@ -164,5 +189,29 @@ public class Alerta {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getMunicipio() {
+        return municipio;
+    }
+
+    public void setMunicipio(String municipio) {
+        this.municipio = municipio;
+    }
+
+    public String getDepartamento() {
+        return departamento;
+    }
+
+    public void setDepartamento(String departamento) {
+        this.departamento = departamento;
+    }
+
+    public Boolean getActivo() {
+        return activo != null ? activo : true;
+    }
+
+    public void setActivo(Boolean activo) {
+        this.activo = activo;
     }
 }

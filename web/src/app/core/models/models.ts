@@ -20,6 +20,8 @@ export type TipoAlerta =
   | 'ANGEL_SHOT_CON_HIELO' 
   | 'ANGEL_SHOT_CON_LIMA' 
   | 'ACOSO_O_INTIMIDACION' 
+  | 'ILUMINACION_DEFICIENTE'
+  | 'ZONA_DESOLADA'
   | 'EMERGENCIA_MEDICA';
 
 export type EstadoAlerta = 
@@ -41,13 +43,29 @@ export interface Alerta {
   tipoAlerta: TipoAlerta;
   nivelUrgencia: NivelUrgencia;
   estado: EstadoAlerta;
+  municipio?: string;
+  departamento?: string;
+  activo?: boolean;
   latitud?: number;
   longitud?: number;
   ubicacionDetalle?: string;
   descripcion?: string;
   codigoSeguridad?: string;
+  distanciaKm?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CrearAlertaRequest {
+  tipoAlerta: TipoAlerta;
+  nivelUrgencia?: NivelUrgencia;
+  municipio: string;
+  departamento?: string;
+  ubicacionDetalle: string;
+  latitud?: number;
+  longitud?: number;
+  descripcion?: string;
+  establecimientoId?: number;
 }
 
 export interface Establecimiento {

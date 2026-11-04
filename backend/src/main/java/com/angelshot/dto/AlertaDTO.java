@@ -19,9 +19,12 @@ public class AlertaDTO {
     private EstadoAlerta estado;
     private Double latitud;
     private Double longitud;
+    private String municipio;
+    private String departamento;
     private String ubicacionDetalle;
     private String descripcion;
     private String codigoSeguridad;
+    private Boolean activo;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -116,6 +119,22 @@ public class AlertaDTO {
         this.longitud = longitud;
     }
 
+    public String getMunicipio() {
+        return municipio;
+    }
+
+    public void setMunicipio(String municipio) {
+        this.municipio = municipio;
+    }
+
+    public String getDepartamento() {
+        return departamento;
+    }
+
+    public void setDepartamento(String departamento) {
+        this.departamento = departamento;
+    }
+
     public String getUbicacionDetalle() {
         return ubicacionDetalle;
     }
@@ -138,6 +157,14 @@ public class AlertaDTO {
 
     public void setCodigoSeguridad(String codigoSeguridad) {
         this.codigoSeguridad = codigoSeguridad;
+    }
+
+    public Boolean getActivo() {
+        return activo != null ? activo : true;
+    }
+
+    public void setActivo(Boolean activo) {
+        this.activo = activo;
     }
 
     public LocalDateTime getCreatedAt() {

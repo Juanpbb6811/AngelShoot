@@ -1,6 +1,18 @@
-# 🛡️ Angel Shot - Plataforma Integral de Auxilio y Seguridad Discreta
+# 🛡️ Angel Shot &bull; Ruta Segura para Mujeres en el Espacio Público Nocturno
 
-Sistema multiplataforma diseñado para brindar asistencia y protección ciudadana discreta ante situaciones de riesgo, incomodidad, acoso o emergencias en establecimientos de ocio nocturno, restaurantes, eventos y espacios públicos, desarrollado bajo la metodología **RUP (Rational Unified Process)**.
+Sistema integral multiplataforma diseñado para la **visibilización colaborativa de puntos de riesgo en el espacio público nocturno** y asistencia discreta ciudadana ante situaciones de vulnerabilidad, acoso o peligro en municipios de Cundinamarca (**Chía, Zipaquirá y Cajicá**), desarrollado bajo la metodología **RUP (Rational Unified Process)**.
+
+---
+
+## 🎯 Solución al Reto: Problema 6
+> **Contexto translocal:** La percepción de inseguridad en parques, vías y entornos universitarios es una problemática constante para la ciudadanía en varios municipios de Cundinamarca. Las mujeres enfrentan barreras adicionales de movilidad y seguridad que requieren soluciones de información colaborativa e inmediata.
+
+### Delimitación y Alcance del Sistema
+* ✅ **Autenticación con JWT:** Solo usuarias/os autenticadas pueden crear nuevos reportes de riesgo en el sistema.
+* ✅ **Formulario de Reporte de Puntos de Riesgo:** Ubicación textual (Municipio precargado: Chía, Zipaquirá, Cajicá + Punto de referencia específico) + Categoría de riesgo (`ACOSO_O_INTIMIDACION`, `ILUMINACION_DEFICIENTE`, `ZONA_DESOLADA`, `ANGEL_SHOT_SOLO`) + Descripción opcional + Fecha/hora automática.
+* ✅ **Visualización, Listado y Filtros:** Lista estructurada ordenada por cercanía/municipio con filtros interactivos por tipo de riesgo y municipio.
+* ✅ **Integración de Mapas & APIs Gratuitas:** Renderizado interactivo con **Leaflet.js y OpenStreetMap**, popups con información detallada y geocodificación inversa gratuita con la API pública de **BigDataCloud**.
+* 🚫 **Fuera de alcance intencional:** No realiza seguimiento en tiempo real (GPS continuo) ni incluye botones de pánico conectados a centrales de policía de emergencia; el valor primordial radica en la visibilización comunitaria y colaborativa.
 
 ---
 
