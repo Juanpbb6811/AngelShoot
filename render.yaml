@@ -9,7 +9,7 @@ services:
   # -------------------------------------------------------------------
   - type: web
     name: angelshot-backend
-    env: docker
+    runtime: docker
     dockerfilePath: Dockerfile
     rootDir: .
     plan: free
@@ -18,6 +18,8 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
       - key: SPRING_DATASOURCE_URL
         sync: false # Configurar con la URL de conexión de Supabase / PostgreSQL
       - key: SPRING_DATASOURCE_USERNAME

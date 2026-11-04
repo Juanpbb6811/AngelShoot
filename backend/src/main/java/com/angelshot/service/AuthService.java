@@ -84,9 +84,9 @@ public class AuthService {
         usuario.setRoles(Collections.singleton(rolUsuario));
         Usuario guardado = usuarioRepository.save(usuario);
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        var authorities = List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(RolNombre.ROLE_USUARIO.name()));
+        Authentication authentication = new UsernamePasswordAuthenticationToken(guardado.getEmail(), null, authorities);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
         String token = tokenProvider.generateToken(authentication);
         List<String> roles = List.of(RolNombre.ROLE_USUARIO.name());

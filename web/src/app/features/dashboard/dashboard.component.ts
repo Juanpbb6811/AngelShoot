@@ -32,9 +32,14 @@ declare const L: any;
             <button (click)="cerrarSesion()" class="btn-secondary btn-sm">Salir</button>
           </div>
           <ng-template #loginPrompt>
-            <button (click)="mostrarModalAuth = true" class="btn-primary">
-              🔑 Iniciar Sesión (JWT)
-            </button>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button (click)="abrirModalLogin()" class="btn-secondary btn-sm">
+                🔑 Iniciar Sesión
+              </button>
+              <button (click)="abrirModalRegistro()" class="btn-primary btn-sm">
+                📝 Registrarse
+              </button>
+            </div>
           </ng-template>
         </div>
       </header>
@@ -78,9 +83,14 @@ declare const L: any;
 
           <div *ngIf="!usuarioActual" class="auth-required-notice">
             <p>🔒 <strong>Acceso restringido:</strong> Debes autenticarte con tu cuenta para registrar reportes de riesgo en el sistema.</p>
-            <button (click)="mostrarModalAuth = true" class="btn-outline-primary" style="margin-top: 0.5rem; width: 100%;">
-              Iniciar Sesión para Reportar
-            </button>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+              <button (click)="abrirModalLogin()" class="btn-outline-primary" style="flex: 1;">
+                Iniciar Sesión
+              </button>
+              <button (click)="abrirModalRegistro()" class="btn-primary" style="flex: 1;">
+                Crear Cuenta
+              </button>
+            </div>
           </div>
 
           <form *ngIf="usuarioActual" (ngSubmit)="enviarReporte()" #reporteForm="ngForm" class="reporte-form">
@@ -336,23 +346,23 @@ declare const L: any;
             <!-- Formulario Registro -->
             <form *ngIf="modoRegistro" (ngSubmit)="registrarse()">
               <div class="form-group">
-                <label>Nombre Completo</label>
-                <input type="text" [(ngModel)]="regNombre" name="regNombre" required class="form-control" />
+                <label>Nombre Completo <span class="req">*</span></label>
+                <input type="text" [(ngModel)]="regNombre" name="regNombre" required class="form-control" placeholder="Tu nombre" />
               </div>
               <div class="form-group">
-                <label>Correo Electrónico</label>
-                <input type="email" [(ngModel)]="regEmail" name="regEmail" required class="form-control" />
+                <label>Correo Electrónico <span class="req">*</span></label>
+                <input type="email" [(ngModel)]="regEmail" name="regEmail" required class="form-control" placeholder="ejemplo@correo.com" />
               </div>
               <div class="form-group">
                 <label>Teléfono (opcional)</label>
-                <input type="text" [(ngModel)]="regTelefono" name="regTelefono" class="form-control" />
+                <input type="text" [(ngModel)]="regTelefono" name="regTelefono" class="form-control" placeholder="+573001234567" />
               </div>
               <div class="form-group">
-                <label>Contraseña (mínimo 6 caracteres)</label>
-                <input type="password" [(ngModel)]="regPassword" name="regPassword" required class="form-control" />
+                <label>Contraseña (mínimo 6 caracteres) <span class="req">*</span></label>
+                <input type="password" [(ngModel)]="regPassword" name="regPassword" required minlength="6" class="form-control" placeholder="Mínimo 6 caracteres" />
               </div>
-              <button type="submit" [disabled]="autenticando" class="btn-submit" style="margin-top: 1rem;">
-                {{ autenticando ? 'Creando cuenta...' : 'Crear Cuenta y Conectar' }}
+              <button type="button" (click)="registrarse()" [disabled]="autenticando" class="btn-submit" style="margin-top: 1rem;">
+                {{ autenticando ? 'Creando cuenta...' : '✨ Registrarse y Entrar' }}
               </button>
             </form>
 
@@ -1276,6 +1286,18 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // Autenticación JWT Rápida
+  abrirModalLogin(): void {
+    this.modoRegistro = false;
+    this.authError = null;
+    this.mostrarModalAuth = true;
+  }
+
+  abrirModalRegistro(): void {
+    this.modoRegistro = true;
+    this.authError = null;
+    this.mostrarModalAuth = true;
+  }
+
   iniciarSesion(): void {
     this.autenticando = true;
     this.authError = null;
@@ -1286,20 +1308,29 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.mostrarModalAuth = false;
         this.cargarDatos();
       },
-      error: () => {
+      error: (err) => {
         this.autenticando = false;
-        this.authError = 'Credenciales inválidas. Verifica tu correo y contraseña.';
+        this.authError = err.error?.message || 'Credenciales inválidas. Verifica tu correo y contraseña.';
       }
     });
   }
 
   registrarse(): void {
+    if (!this.regNombre || !this.regEmail || !this.regPassword) {
+      this.authError = 'Por favor completa todos los campos requeridos (Nombre, Correo, Contraseña).';
+      return;
+    }
+    if (this.regPassword.length < 6) {
+      this.authError = 'La contraseña debe tener al menos 6 caracteres.';
+      return;
+    }
+
     this.autenticando = true;
     this.authError = null;
     this.apiService.registro({
-      nombre: this.regNombre,
-      email: this.regEmail,
-      telefono: this.regTelefono,
+      nombre: this.regNombre.trim(),
+      email: this.regEmail.trim(),
+      telefono: this.regTelefono ? this.regTelefono.trim() : undefined,
       password: this.regPassword
     }).subscribe({
       next: (res) => {
@@ -1308,9 +1339,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.mostrarModalAuth = false;
         this.cargarDatos();
       },
-      error: () => {
+      error: (err) => {
         this.autenticando = false;
-        this.authError = 'Error al crear la cuenta. Puede que el correo ya esté registrado.';
+        this.authError = err.error?.message || 'Error al crear la cuenta. Verifica los datos o si el correo ya está registrado.';
       }
     });
   }
