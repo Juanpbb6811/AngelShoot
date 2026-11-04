@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.angelshot.app.ui.navigation.Screen
 import com.angelshot.app.ui.screens.auth.LoginScreen
+import com.angelshot.app.ui.screens.auth.RegisterScreen
 import com.angelshot.app.ui.screens.operador.TableroOperadorScreen
 import com.angelshot.app.ui.screens.usuario.HomeScreen
 import com.angelshot.app.ui.theme.AngelShotTheme
@@ -44,7 +45,23 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onNavigateToRegister = {
-                                    // Navegar a registro
+                                    navController.navigate(Screen.Register.route)
+                                }
+                            )
+                        }
+
+                        composable(Screen.Register.route) {
+                            RegisterScreen(
+                                onRegisterSuccess = {
+                                    // Navigate to home or login after success
+                                    navController.navigate(Screen.Login.route) {
+                                        popUpTo(Screen.Login.route) { inclusive = true }
+                                    }
+                                },
+                                onNavigateToLogin = {
+                                    navController.navigate(Screen.Login.route) {
+                                        popUpTo(Screen.Login.route) { inclusive = true }
+                                    }
                                 }
                             )
                         }
