@@ -1,0 +1,52 @@
+# ================== BACKEND MAVEN & JAVA ==================
+**/target/
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**
+!**/src/test/**
+
+# ================== FRONTEND ANDROID & GRADLE ==================
+.gradle/
+**/.gradle/
+build/
+**/build/
+*.apk
+!releases/*.apk
+*.aab
+local.properties
+.cxx/
+keystore/*.jks
+*.keystore
+
+# ================== IDEs ==================
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+
+# ================== LOGS, OS & DOCS TEMPORALES ==================
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# ================== VARIABLES DE ENTORNO Y SECRETOS ==================
+.env
+*.env
+.env.local
+.env.production
+secrets/
+*.pem
+*.key
+
+# ================== FRONTEND WEB & NODE ==================
+**/node_modules/
+**/dist/
+**/.angular/
+.angular/cache/
+package-lock.json.backup

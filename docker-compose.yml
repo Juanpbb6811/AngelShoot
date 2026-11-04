@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: angelshot-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-angelshot_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - angelshot_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: angelshot-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:10000"
+    environment:
+      PORT: 10000
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-angelshot_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JPA_DDL_AUTO: update
+      SHOW_SQL: true
+      JWT_SECRET: ${JWT_SECRET:-AngelShotSecretKey2026SecureKeyWithMoreThan256BitsLongForHMACSHA256Algorithm}
+
+volumes:
+  angelshot_db_data:

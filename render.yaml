@@ -1,0 +1,50 @@
+# =======================================================================
+# Render Blueprint (render.yaml) - Angel Shot Full Stack
+# Orquesta el despliegue del Backend (Spring Boot 3) y Frontend Web (Angular)
+# =======================================================================
+
+services:
+  # -------------------------------------------------------------------
+  # 1. Backend REST API (Spring Boot 3.3.4 / Docker / Java 21)
+  # -------------------------------------------------------------------
+  - type: web
+    name: angelshot-backend
+    env: docker
+    dockerfilePath: Dockerfile
+    rootDir: .
+    plan: free
+    region: ohio
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: SPRING_DATASOURCE_URL
+        sync: false # Configurar con la URL de conexión de Supabase / PostgreSQL
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false # Usuario de base de datos
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false # Contraseña de base de datos
+      - key: JWT_SECRET
+        generateValue: true # Render genera automáticamente un secreto seguro de 256 bits
+      - key: JPA_DDL_AUTO
+        value: update
+      - key: SHOW_SQL
+        value: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: Angel Shot <onboarding@resend.dev>
+
+  # -------------------------------------------------------------------
+  # 2. Frontend Web Dashboard (Angular / SPA Static Site)
+  # -------------------------------------------------------------------
+  - type: web
+    name: angelshot-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist/angelshot-web/browser
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
